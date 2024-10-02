@@ -5,8 +5,15 @@ import time
 import sys
 import configparser
 import datetime
+import ctypes
+from bcc import BPF
 
-from bcc import BPF, PerfType, PerfSWConfig
+# Define the struct to match `pid_comm_t` in eBPF
+class PidComm(ctypes.Structure):
+    _fields_ = [
+        ('pid', ctypes.c_uint32),
+        ('comm', ctypes.c_char * 16),
+    ]
 
 parser = argparse.ArgumentParser(description='System performance and energy metrics tool')
 parser.add_argument('-i', '--sample-rate', type=int, default=5000,
@@ -51,45 +58,75 @@ config = configparser.ConfigParser()
 config.read('weights.conf')
 
 # Weights for each component
-CPU_WEIGHT = float(config['Weights'].get('CPU_WEIGHT', 0.6))
-WAKEUP_WEIGHT = float(config['Weights'].get('WAKEUP_WEIGHT', 0.2))
-DISK_WEIGHT = float(config['Weights'].get('DISK_WEIGHT', 0.1))
-NETWORK_WEIGHT = float(config['Weights'].get('NETWORK_WEIGHT', 0.1))
-MEMORY_WEIGHT = float(config['Weights'].get('MEMORY_WEIGHT', 0.1))
+CPU_WEIGHT = float(config['Weights'].get('CPU_WEIGHT', 1))
+WAKEUP_WEIGHT = float(config['Weights'].get('WAKEUP_WEIGHT', 0))
+DISK_WRITE_WEIGHT = float(config['Weights'].get('DISK_WRITE_WEIGHT', 0))
+DISK_READ_WEIGHT = float(config['Weights'].get('DISK_READ_WEIGHT', 0))
+NETWORK_WRITE_WEIGHT = float(config['Weights'].get('NETWORK_WRITE_WEIGHT', 0))
+NETWORK_READ_WEIGHT = float(config['Weights'].get('NETWORK_READ_WEIGHT', 0))
+MEMORY_WEIGHT = float(config['Weights'].get('MEMORY_WEIGHT', 0))
 
 num_cpus = os.cpu_count()
 
 b = BPF(text=bpf_program)
 
+sample_interval_sec = args.sample_rate / 1000  # Convert ms to seconds
+interval_ns = sample_interval_sec * 1e9  # Convert to nanoseconds
+sample_count = args.sample_count
+current_sample = 0
+page_size = os.sysconf('SC_PAGE_SIZE')
+
+
 class Data:
     def __init__(self):
-        self.pid = 0
+        self.pid = -1
         self.comm = ""
         self.cmdline = ""
         self.cpu_time_ns = 0
         self.cpu_wakeups = 0
         self.memory_usage = 0
-        self.memory_usage_mb = 0
         self.ebpf_memory_usage = 0
-        self.ebpf_memory_usage_mb = 0
         self.net_rx_packets = 0
         self.net_tx_packets = 0
         self.disk_read_bytes = 0
         self.disk_write_bytes = 0
-        self.energy_impact=0
         self.is_kernel_thread = False
+
+    def memory_usage_mb(self):
+        return self.memory_usage / (1024 * 1024)
+
+    def ebpf_memory_usage_mb(self):
+        return self.ebpf_memory_usage / (1024 * 1024)
+
+    def cpu_utilization(self):
+        if self.pid == 0:
+            # As pid 0 is multiple programs in one we need to get the idle_time counter from ebpf
+            # The key is the cpu number
+            idle_times = b.get_table("idle_time_ns")
+            self.cpu_time_ns = sum([idle_times[cpu_id].value for cpu_id in idle_times.keys()])
+
+        return (data.cpu_time_ns / (interval_ns * num_cpus)) * 100
+
+    def energy_impact(self):
+        if self.pid == 0:
+            # We can't really assign a value to the system being idle on one to n cores
+            return 0
+
+        return (CPU_WEIGHT * data.cpu_utilization()) + \
+            (WAKEUP_WEIGHT * data.cpu_wakeups) + \
+            (DISK_WRITE_WEIGHT * data.disk_write_bytes) + \
+            (DISK_READ_WEIGHT * data.disk_read_bytes) + \
+            (NETWORK_WRITE_WEIGHT * data.net_tx_packets) + \
+            (NETWORK_READ_WEIGHT * data.net_rx_packets) + \
+            (MEMORY_WEIGHT * data.memory_usage)
+
 
 # Monitoring loop
 try:
-    sample_interval_sec = args.sample_rate / 1000  # Convert ms to seconds
-    interval_ns = sample_interval_sec * 1e9  # Convert to nanoseconds
-    sample_count = args.sample_count
-    current_sample = 0
-    page_size = os.sysconf('SC_PAGE_SIZE')
 
     # Print header
     if not args.output_file:
-        print("Starting powermetrics monitoring. Press Ctrl+C to stop.")
+        print("Starting powerletrics monitoring. Press Ctrl+C to stop.")
 
     while True:
         start_loop_time = datetime.datetime.now()
@@ -102,6 +139,9 @@ try:
         tx_packets = b.get_table("net_tx_packets")
         disk_reads = b.get_table("disk_read_bytes")
         disk_writes = b.get_table("disk_write_bytes")
+        idle_times = b.get_table("idle_time_ns")
+        pid_comm_map = b.get_table("pid_comm_map")
+
 
         data_list = []
 
@@ -118,55 +158,48 @@ try:
             data.disk_read_bytes = disk_reads[pid_key].value if pid_key in disk_reads else 0
             data.disk_write_bytes = disk_writes[pid_key].value if pid_key in disk_writes else 0
 
+            pid_comm = pid_comm_map.get(ctypes.c_uint32(pid))
+            if pid_comm:
+                data.comm = pid_comm.comm.decode('utf-8', 'replace')
+            else:
+                data.comm = "<unknown>"
+
             # We currently keep both implementations to debug the difference
             if args.ebpf_memory:
                 ebpf_mem_usages = b.get_table("mem_usage_bytes")
                 data.ebpf_memory_usage = ebpf_mem_usages[pid_key].value if pid_key in ebpf_mem_usages else 0
-                data.ebpf_memory_usage_mb = data.ebpf_memory_usage / (1024 * 1024)
 
-            try:
-                with open(f"/proc/{data.pid}/cmdline", 'rb') as f:
-                    data.cmdline = f.read().replace(b'\x00', b' ').strip().decode('utf-8', 'replace')
-                    if data.cmdline == '':
-                        data.is_kernel_thread = True
-            except:
-                data.cmdline = "<unknown>"
-
-            try:
-                with open(f"/proc/{data.pid}/comm", 'rb') as j:
-                    data.comm = j.read().replace(b'\x00', b' ').strip().decode('utf-8', 'replace')
-            except:
-                data.comm = "<unknown>"
-
-            if not data.is_kernel_thread:
-                try:
-                    # We don't get the memory through ebpf in the default case as there is no way to iterate over all
-                    # processes in eBPF for security reasons.
-                    # If you want to still use eBPD you can enable it with --ebpf-memory.
-                    with open(f"/proc/{data.pid}/statm", 'r') as f:
-                        statm = f.readline().split()
-                        if len(statm) >= 2:
-                            total_pages = int(statm[0])
-                            data.memory_usage = total_pages * page_size
-                            data.memory_usage_mb = data.memory_usage / (1024 * 1024)
-
-                except:
-                    data.memory_usage = 0  # Process might have exited
-            else:
-                # Kernel threads don't have user space memory
+            # PID 0 is an odd thing.
+            if data.pid == 0:
+                data.cmdline = "<idle>"
+                data.comm = "Kernel Idle"
                 data.memory_usage = 0
+                data.ebpf_memory_usage = 0
+                data.is_kernel_thread = True
+            else:
+                try:
+                    with open(f"/proc/{data.pid}/cmdline", 'rb') as f:
+                        data.cmdline = f.read().replace(b'\x00', b' ').strip().decode('utf-8', 'replace')
+                        if data.cmdline == '':
+                            data.is_kernel_thread = True
+                except:
+                    data.cmdline = ""
 
-            data.cpu_utilization = (data.cpu_time_ns / (interval_ns * num_cpus)) * 100
-
-            total_disk_io = data.disk_read_bytes + data.disk_write_bytes
-            total_network_packets = data.net_rx_packets + data.net_tx_packets
-
-            data.energy_impact = (CPU_WEIGHT * data.cpu_utilization) + \
-                            (WAKEUP_WEIGHT * data.cpu_wakeups) + \
-                            (DISK_WEIGHT * total_disk_io / 1024) + \
-                            (NETWORK_WEIGHT * total_network_packets) + \
-                            (MEMORY_WEIGHT * data.memory_usage_mb)
-
+                if not data.is_kernel_thread:
+                    try:
+                        # We don't get the memory through ebpf in the default case as there is no way to iterate over all
+                        # processes in eBPF for security reasons.
+                        # If you want to still use eBPD you can enable it with --ebpf-memory.
+                        with open(f"/proc/{data.pid}/statm", 'r') as f:
+                            statm = f.readline().split()
+                            if len(statm) >= 2:
+                                total_pages = int(statm[0])
+                                data.memory_usage = total_pages * page_size
+                    except:
+                        data.memory_usage = 0  # Process might have exited
+                else:
+                    # Kernel threads don't have user space memory
+                    data.memory_usage = 0
 
             data_list.append(data)
 
@@ -178,7 +211,7 @@ try:
         elif args.order == 'cputime':
             data_list.sort(key=lambda x: x.cpu_time_ns, reverse=True)
         elif args.order == 'composite':
-            data_list.sort(key=lambda x: x.energy_impact, reverse=True)
+            data_list.sort(key=lambda x: x.energy_impact(), reverse=True)
 
         elapsed_time = datetime.datetime.now() - start_loop_time
         elapsed_time_ms = elapsed_time.total_seconds() * 1000
@@ -187,22 +220,6 @@ try:
         if args.format == 'text':
             print(f"\n*** Sampled system activity ({current_time}) ({elapsed_time_ms:.2f}ms elapsed) ***\n")
             print("*** Running tasks ***\n")
-
-            # for data in data_list:
-            #     output = f"PID: {data.pid}, Cmdline: {data.cmdline}"
-            #     if args.show_process_energy or args.show_all :
-            #         output += f", Energy Impact: {data.energy_impact:.2f}"
-            #     output += f", CPU Utilization (%): {data.cpu_utilization:.2f}"
-            #     output += f", CPU Time (ns): {data.cpu_time_ns}"
-            #     output += f", CPU Wakeups: {data.cpu_wakeups}"
-            #     output += f", Memory Usage (MB): {data.memory_usage_mb:.2f}"
-            #     if args.ebpf_memory:
-            #          output += f", eBPF Memory Usage (MB): {data.ebpf_memory_usage_mb:.2f}"
-            #     if args.show_process_io or args.show_all:
-            #         output += f", Disk Read Bytes: {data.disk_read_bytes}, Disk Write Bytes: {data.disk_write_bytes}"
-            #     if args.show_process_netstats or args.show_all:
-            #         output += f", Net RX Packets: {data.net_rx_packets}, Net TX Packets: {data.net_tx_packets}"
-            #     print(output)
 
             headers = ['PID', 'Name']
             if args.show_process_energy or args.show_all:
@@ -225,20 +242,20 @@ try:
             for data in data_list:
                 row = [data.pid, data.comm]
                 if args.show_process_energy or args.show_all:
-                    row.append(f"{data.energy_impact:.2f}")
-                row.append(f"{data.cpu_utilization:.2f}")
+                    row.append(f"{data.energy_impact():.2f}")
+                row.append(f"{data.cpu_utilization():.2f}")
                 row.append(data.cpu_time_ns)
                 row.append(data.cpu_wakeups)
                 if data.is_kernel_thread:
                     row.append('-')
                 else:
-                    row.append(f"{data.memory_usage_mb:.2f}")
+                    row.append(f"{data.memory_usage_mb():.2f}")
 
                 if args.ebpf_memory:
                     if data.is_kernel_thread:
                         row.append('-')
                     else:
-                        row.append(f"{data.ebpf_memory_usage_mb:.2f}")
+                        row.append(f"{data.ebpf_memory_usage_mb():.2f}")
                 if args.show_process_io or args.show_all:
                     row.extend([data.disk_read_bytes, data.disk_write_bytes])
                 if args.show_process_netstats or args.show_all:
@@ -280,22 +297,22 @@ try:
                 }
 
                 if args.show_process_energy or args.show_all:
-                    data_dict['Energy Impact'] = data.energy_impact
+                    data_dict['Energy Impact'] = data.energy_impact()
 
-                data_dict['CPU Utilization (%)'] = data.cpu_utilization
+                data_dict['CPU Utilization (%)'] = data.cpu_utilization()
                 data_dict['CPU Time (ns)'] = data.cpu_time_ns
                 data_dict['CPU Wakeups'] = data.cpu_wakeups
 
                 if data.is_kernel_thread:
                     data_dict['Memory Usage (MB)'] = '-'
                 else:
-                    data_dict['Memory Usage (MB)'] = data.memory_usage_mb
+                    data_dict['Memory Usage (MB)'] = data.memory_usage_mb()
 
                 if args.ebpf_memory:
                     if data.is_kernel_thread:
                         data_dict['eBPF Memory Usage (MB)'] = '-'
                     else:
-                        data_dict['eBPF Memory Usage (MB)'] = data.ebpf_memory_usage_mb
+                        data_dict['eBPF Memory Usage (MB)'] = data.ebpf_memory_usage_mb()
 
                 if args.show_process_io or args.show_all:
                     data_dict['Disk Read Bytes'] = data.disk_read_bytes
@@ -322,6 +339,8 @@ try:
         tx_packets.clear()
         disk_reads.clear()
         disk_writes.clear()
+        idle_times.clear()
+        pid_comm_map.clear()
 
         current_sample += 1
         if sample_count != 0 and current_sample >= sample_count:
