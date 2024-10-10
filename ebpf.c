@@ -29,6 +29,7 @@ TRACEPOINT_PROBE(sched, sched_switch) {
     u64 ts = bpf_ktime_get_ns();
     u32 cpu = bpf_get_smp_processor_id();
 
+    // TASK_COMM_LEN +1 because of \0 ?
     char prev_comm[TASK_COMM_LEN];
     char next_comm[TASK_COMM_LEN];
     bpf_probe_read_kernel(&prev_comm, sizeof(prev_comm), args->prev_comm);
@@ -48,17 +49,26 @@ TRACEPOINT_PROBE(sched, sched_switch) {
     // Handle the idle task being scheduled out
     if (prev_pid == 0) {
         // Idle task is being scheduled out
+        // For a lookup in the hash map, do I really have to pass the address of the int? Really? Not the value itself?
         u64 *start_ns = idle_start_time_ns.lookup(&cpu);
+        // what happens if start_ns is 0? not better compare with NULL ?
         if (start_ns) {
             u64 delta = ts - *start_ns;
             u64 *total_ns = idle_time_ns.lookup(&cpu);
+            // what happens if total_ns is 0? This should be more likely than start_ns not better compare with NULL ?
             if (total_ns) {
                 *total_ns += delta;
+                // missing update command? should it not be idle_time_ns.update(&cpu, total_ns);
             } else {
+                // if you store the addresses and not the values, why are these u64?
                 idle_time_ns.update(&cpu, &delta);
             }
             idle_start_time_ns.delete(&cpu);
         }
+
+        // missing return statement? Why continue here?
+        // if prev_pid = 0 can it also be that next_pid = ?
+        // the event takes place per CPU, right? So I guess it cannot be ...
     }
 
     // Handle the idle task being scheduled in
@@ -70,31 +80,39 @@ TRACEPOINT_PROBE(sched, sched_switch) {
 
     // Handle the task that is being switched out
     u64 *start_ns = start_time.lookup(&prev_pid);
+    // what happens if start_ns is 0? not better compare with NULL ?
     if (start_ns) {
         u64 delta = ts - *start_ns;
+        // why do you use a different command here lookup => lookup_or_try_init ?
         u64 *total_ns = cpu_time_ns.lookup_or_try_init(&prev_pid, &delta);
         if (total_ns) {
             *total_ns += delta;
+            // do you not need to write total_ns somewhere?
         }
         start_time.delete(&prev_pid);
     } else {
         u64 zero = 0;
         u64 *total_ns = cpu_time_ns.lookup_or_try_init(&prev_pid, &zero);
+        // do you not need to write total_ns somewhere?
     }
 
 
     // Record the start time for the task being switched in
+    // This call is relevant for including or excluding the overhead of this eBPF script and is somehow in nowhere land ... Neither as early as possible, nor as late as possible. Where is it placed best? Does the event happen AFTER being scheduled on the CPU or BEFORE. In the former case I would argue to push this call to the end of the function. In the latter I would push it more to the start.
     start_time.update(&next_pid, &ts);
 
     // Increment wakeup count for the task being switched in
+    // is that really all the wakeups? When a process is assigned to a CPU and has I/O wait it is not scheduled out, but still can have wakeups happening from I/O being available. Can we have a validation script for eBPF and perf_events that compares the wakeups?
+    // you could also compare with sched:sched_wakeup
     u64 zero = 0;
     u64 *wakeup_count = cpu_wakeups.lookup_or_try_init(&next_pid, &zero);
     if (wakeup_count) {
         *wakeup_count += 1;
     }
 
+    // what is coming out of bpf_get_current_task? A void pointer? suprising that you have to cast here
     struct task_struct *task = (struct task_struct *)bpf_get_current_task();
-     if ((task->flags & PF_KTHREAD) == 0) {
+     if ((task->flags & PF_KTHREAD) == 0) { // what does this line mean?
         u32 pid = task->pid;
         u64 zero = 0;
         u64 *mem_usage = mem_usage_bytes.lookup_or_try_init(&pid, &zero);
@@ -133,9 +151,10 @@ TRACEPOINT_PROBE(sched, sched_switch) {
 // }
 
 // Network packet monitoring
+// can you document the event netif_receive_skb and why you chose this over other possible events?
 TRACEPOINT_PROBE(net, netif_receive_skb) {
-    u32 pid = bpf_get_current_pid_tgid() >> 32;
-    u64 one = 1;
+    u32 pid = bpf_get_current_pid_tgid() >> 32; // what does this right shift do exactly?
+    u64 one = 1; // why do you supply one here instead of zero in the sched Tracepoint? Is this tracepoint called for EVERY packet?
     u64 *rx_packets = net_rx_packets.lookup_or_try_init(&pid, &one);
     if (rx_packets) {
         *rx_packets += 1;
@@ -143,9 +162,10 @@ TRACEPOINT_PROBE(net, netif_receive_skb) {
     return 0;
 }
 
+// can you document the event net_dev_queue and why you chose this over other possible events?
 TRACEPOINT_PROBE(net, net_dev_queue) {
-    u32 pid = bpf_get_current_pid_tgid() >> 32;
-    u64 one = 1;
+    u32 pid = bpf_get_current_pid_tgid() >> 32;  // what does this right shift do exactly?
+    u64 one = 1; // why do you supply one here instead of zero in the sched Tracepoint? Is this tracepoint called for EVERY packet?
     u64 *tx_packets = net_tx_packets.lookup_or_try_init(&pid, &one);
     if (tx_packets) {
         *tx_packets += 1;
@@ -154,6 +174,7 @@ TRACEPOINT_PROBE(net, net_dev_queue) {
 }
 
 // Disk I/O monitoring
+// can you document the event block_rq_issue and why you chose this over other possible events?
 TRACEPOINT_PROBE(block, block_rq_issue) {
     u32 pid = bpf_get_current_pid_tgid() >> 32;
     u64 bytes = args->bytes;
@@ -162,6 +183,7 @@ TRACEPOINT_PROBE(block, block_rq_issue) {
     bpf_probe_read_kernel(&rwbs, sizeof(rwbs), args->rwbs);
 
     // Determine if the operation is a read or write
+    // Are we ignoring other types like flush and sync? Or do they also trigger a write?
     if (rwbs[0] == 'R') {
         u64 *read_bytes = disk_read_bytes.lookup_or_try_init(&pid, &bytes);
         if (read_bytes) {
