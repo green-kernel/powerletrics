@@ -1,4 +1,6 @@
-#include <uapi/linux/ptrace.h>
+#pragma GCC diagnostic ignored "-Wduplicate-decl-specifier"
+
+//#include <uapi/linux/ptrace.h>
 #include <linux/sched.h>
 #include <linux/mm_types.h>
 

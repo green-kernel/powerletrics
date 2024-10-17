@@ -11,8 +11,12 @@ https://github.com/iovisor/bcc/blob/master/INSTALL.md
 
 You can then run the program from the shell with sudo
 ```
-sudo python3 powerletrics.py -i 1000 --show-all --ebpf-memory --flush
+sudo python3 powerletrics.py -i 1000 --show-all
 ```
+
+### CPU Energy
+
+There is also the option to get the CPU energy from RAPL. You can activate this with ``--rapl``
 
 ## Screenshot
 
