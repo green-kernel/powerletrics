@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Powerletrics Dashboard</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/fomantic-ui@2.9.3/dist/semantic.min.css">
+    <link href="https://cdn.datatables.net/v/se/dt-2.1.8/cr-2.0.4/fh-4.0.1/kt-2.12.1/r-3.0.3/sc-2.4.3/datatables.min.css" rel="stylesheet">
+</head>
+
+<body>
+    <div class="ui container">
+
+        <div class="ui menu">
+            <a class="item" href="/">
+              <img class="ui mini image" src="logo.png">&NonBreakingSpace;
+              Powerletrics
+            </a>
+            <a class="item" target="_blank" href="https://github.com/green-kernel/powerletrics/blob/main/README.md">
+                <i class="book icon"></i>
+                Documentation
+            </a>
+            <a class="item" target="_blank" href="https://github.com/green-kernel/powerletrics">
+                <i class="github icon"></i>
+                GitHub
+            </a>
+          </div>
+
+
+
+        <div class="ui info icon message">
+            <i class="info circle icon"></i>
+            <div class="content">
+                <div class="header">
+                This dashboard only shows the last five minutes of data.
+                </div>
+                <p>The idea of this dashboard is to give you a quick insight into the data and not for it to be run for a long period of time. The problem is that the longer we run the more data we collect and we collect a lot of data. And fairly soon we need a proper database. And for this project we want to focus on the Linux stuff and not on DBs.</p>
+            </div>
+        </div>
+
+        <div class="ui segment">
+
+            <div id="update_progress" class="ui top attached progress">
+                <div class="bar"></div>
+              </div>
+
+            <div class="ui four cards stackable">
+
+                <div class="ui card phase-duration">
+                    <div class="ui content">
+                        <div class="ui top attached blue label overflow-ellipsis">Total Energy used<span class="si-unit">[mWH]</span></div>
+                        <div class="description">
+                            <div class="ui fluid mini statistic">
+                                <div class="value">
+                                    300.07
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="ui card phase-duration">
+                    <div class="ui content">
+                        <div class="ui top attached blue label overflow-ellipsis">Energy used last hour <span class="si-unit">[mWH]</span></div>
+                        <div class="description">
+                            <div class="ui fluid mini statistic">
+                                <div class="value">
+                                    300.07
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="ui card phase-duration">
+                    <div class="ui content">
+                        <div class="ui top attached orange label overflow-ellipsis">Top process 5 min <span class="si-unit">[mWH]</span></div>
+                        <div class="description">
+                            <div class="ui fluid mini statistic">
+                                <div class="value">
+                                    Python
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="ui card phase-duration">
+                    <div class="ui content">
+                        <div class="ui top attached orange label overflow-ellipsis">Top process last hour <span class="si-unit">[mWH]</span></div>
+                        <div class="description">
+                            <div class="ui fluid mini statistic">
+                                <div class="value">
+                                    code
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+
+        <!--
+        - How long the process has been running
+        - Average elapsed time
+        - How many records created
+        -->
+        <body>
+            <!-- Prepare a DOM with a defined width and height for ECharts -->
+            <div id="main_chart" style="width: 100%;height:400px;"></div>
+          </body>
+
+        <div class="ui segment">
+            <div class="ui fluid multiple search selection dropdown" id="column-selector">
+                <input type="hidden" name="columns">
+                <i class="dropdown icon"></i>
+                <div class="default text">Select Columns</div>
+                <div class="menu">
+                    <div class="item" data-value="0">PID</div>
+                    <div class="item" data-value="1">CPU Time (ns)</div>
+                    <div class="item" data-value="2">CPU Wakeups</div>
+                    <div class="item" data-value="3">Memory Usage (Bytes)</div>
+                    <div class="item" data-value="4">Memory Usage (MB)</div>
+                    <div class="item" data-value="5">Network RX Packets</div>
+                    <div class="item" data-value="6">Network TX Packets</div>
+                    <div class="item" data-value="7">Disk Read (Bytes)</div>
+                    <div class="item" data-value="8">Disk Write (Bytes)</div>
+                    <div class="item" data-value="9">CPU Utilization (%)</div>
+                    <div class="item" data-value="10">Energy Impact</div>
+                    <div class="item" data-value="11">Command Line</div>
+                    <div class="item" data-value="12">Command</div>
+                </div>
+            </div>
+            <div id="table_laoding_loader" class="ui active inverted dimmer">
+                <div class="ui loader"></div>
+            </div>
+            <p></p>
+            <table id="datatable"></table>
+        </div>
+    </div>
+</body>
+<script src="jquery-3.7.1.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/fomantic-ui@2.9.3/dist/semantic.min.js"></script>
+<script src="https://cdn.datatables.net/v/se/dt-2.1.8/cr-2.0.4/fh-4.0.1/kt-2.12.1/r-3.0.3/sc-2.4.3/datatables.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/echarts@5.5.1/dist/echarts.min.js"></script>
+<script src="script.js"></script>
+</html>
+
+
