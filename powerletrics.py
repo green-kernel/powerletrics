@@ -57,6 +57,8 @@ with open("ebpf.c", 'r') as f:
 config = configparser.ConfigParser()
 config.read('weights.conf')
 
+## Explanation for the weights?
+
 # Weights for each component
 CPU_WEIGHT = float(config['Weights'].get('CPU_WEIGHT', 1))
 WAKEUP_WEIGHT = float(config['Weights'].get('WAKEUP_WEIGHT', 0))
@@ -77,6 +79,7 @@ current_sample = 0
 page_size = os.sysconf('SC_PAGE_SIZE')
 
 
+# What does this object represent? A process? Maybe name it process then?
 class Data:
     def __init__(self):
         self.pid = -1
@@ -93,10 +96,10 @@ class Data:
         self.is_kernel_thread = False
 
     def memory_usage_mb(self):
-        return self.memory_usage / (1024 * 1024)
+        return self.memory_usage / (1024 * 1024)  # Think about defining a constant here? BYTES_TO_MB instead of function?
 
     def ebpf_memory_usage_mb(self):
-        return self.ebpf_memory_usage / (1024 * 1024)
+        return self.ebpf_memory_usage / (1024 * 1024) # Think about defining a constant here? BYTES_TO_MB instead of function?
 
     def cpu_utilization(self):
         if self.pid == 0:
@@ -105,13 +108,16 @@ class Data:
             idle_times = b.get_table("idle_time_ns")
             self.cpu_time_ns = sum([idle_times[cpu_id].value for cpu_id in idle_times.keys()])
 
-        return (data.cpu_time_ns / (interval_ns * num_cpus)) * 100
+        # What is data ?
+        return (data.cpu_time_ns / (interval_ns * num_cpus)) * 100  # Is this wall time or is this cycles?
 
     def energy_impact(self):
+        # I do not understand why the idle thread has no energy impact? Does it not have any of these metrics like wakeups?
         if self.pid == 0:
             # We can't really assign a value to the system being idle on one to n cores
             return 0
 
+        # What is data?
         return (CPU_WEIGHT * data.cpu_utilization()) + \
             (WAKEUP_WEIGHT * data.cpu_wakeups) + \
             (DISK_WRITE_WEIGHT * data.disk_write_bytes) + \
@@ -129,8 +135,8 @@ try:
         print("Starting powerletrics monitoring. Press Ctrl+C to stop.")
 
     while True:
-        start_loop_time = datetime.datetime.now()
-        time.sleep(sample_interval_sec)
+        start_loop_time = datetime.datetime.now() # maybe use a true monotonic timer here? Thinking leap seconds and daylight savings time ...
+        time.sleep(sample_interval_sec) # how granular does this sleep need to be? Maybe use better python timer?
 
         # Retrieve data from eBPF maps
         cpu_times = b.get_table("cpu_time_ns")
@@ -149,7 +155,7 @@ try:
             is_kernel_thread = False
 
             pid = pid_key.value
-            data = Data()
+            data = Data() # this would be nicer in an __init__ function as submitted params, but I see the issue with .value
             data.pid = pid
             data.cpu_time_ns = cpu_times[pid_key].value
             data.cpu_wakeups = wakeups[pid_key].value if pid_key in wakeups else 0
@@ -159,7 +165,7 @@ try:
             data.disk_write_bytes = disk_writes[pid_key].value if pid_key in disk_writes else 0
 
             pid_comm = pid_comm_map.get(ctypes.c_uint32(pid))
-            if pid_comm:
+            if pid_comm: # can this not false to 0 ?
                 data.comm = pid_comm.comm.decode('utf-8', 'replace')
             else:
                 data.comm = "<unknown>"
@@ -187,6 +193,7 @@ try:
 
                 if not data.is_kernel_thread:
                     try:
+                        # I do not understand the limitation here ... why do it if it will not be useful?
                         # We don't get the memory through ebpf in the default case as there is no way to iterate over all
                         # processes in eBPF for security reasons.
                         # If you want to still use eBPD you can enable it with --ebpf-memory.
@@ -214,7 +221,7 @@ try:
             data_list.sort(key=lambda x: x.energy_impact(), reverse=True)
 
         elapsed_time = datetime.datetime.now() - start_loop_time
-        elapsed_time_ms = elapsed_time.total_seconds() * 1000
+        elapsed_time_ms = elapsed_time.total_seconds() * 1000 # Think about defining a constant here? FROM_S_TO_MS ?
 
         current_time = datetime.datetime.now().strftime("%a %b %d %H:%M:%S %Y %z")
         if args.format == 'text':
@@ -327,13 +334,13 @@ try:
 
                 plist_data.append(data_dict)
 
-                if args.output_file:
+                if args.output_file: # is this appended?
                     with open(args.output_file, 'wb') as f:
                         plistlib.dump(plist_data, f, fmt=plistlib.FMT_XML)
                 else:
                     plistlib.dump(plist_data, sys.stdout.buffer, fmt=plistlib.FMT_XML)
 
-        cpu_times.clear()
+        cpu_times.clear() # What does this do exactly, given hat an eBPF structure is requested?
         wakeups.clear()
         rx_packets.clear()
         tx_packets.clear()
