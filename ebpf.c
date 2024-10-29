@@ -30,6 +30,7 @@ TRACEPOINT_PROBE(sched, sched_switch) {
     u32 cpu = bpf_get_smp_processor_id();
 
     // TASK_COMM_LEN +1 because of \0 ?
+    // https://github.com/iovisor/bcc/blob/master/docs/reference_guide.md#6-bpf_get_current_comm
     char prev_comm[TASK_COMM_LEN];
     char next_comm[TASK_COMM_LEN];
     bpf_probe_read_kernel(&prev_comm, sizeof(prev_comm), args->prev_comm);
@@ -50,8 +51,10 @@ TRACEPOINT_PROBE(sched, sched_switch) {
     if (prev_pid == 0) {
         // Idle task is being scheduled out
         // For a lookup in the hash map, do I really have to pass the address of the int? Really? Not the value itself?
+        // https://github.com/iovisor/bcc/blob/master/docs/reference_guide.md#19-maplookup
         u64 *start_ns = idle_start_time_ns.lookup(&cpu);
         // what happens if start_ns is 0? not better compare with NULL ?
+        // true, but start_ns shouldn't be 0. But you could make it more explicit. As lookup returns NULL if the key is not found
         if (start_ns) {
             u64 delta = ts - *start_ns;
             u64 *total_ns = idle_time_ns.lookup(&cpu);
@@ -59,9 +62,12 @@ TRACEPOINT_PROBE(sched, sched_switch) {
             if (total_ns) {
                 *total_ns += delta;
                 // missing update command? should it not be idle_time_ns.update(&cpu, total_ns);
+                // I update the pointed to value. So it should update in the map
             } else {
                 // if you store the addresses and not the values, why are these u64?
+                // Becaue the map stores the acutal value not the pointer
                 idle_time_ns.update(&cpu, &delta);
+                
             }
             idle_start_time_ns.delete(&cpu);
         }
@@ -69,6 +75,8 @@ TRACEPOINT_PROBE(sched, sched_switch) {
         // missing return statement? Why continue here?
         // if prev_pid = 0 can it also be that next_pid = ?
         // the event takes place per CPU, right? So I guess it cannot be ...
+        // But I want to look at the next task?
+        
     }
 
     // Handle the idle task being scheduled in
@@ -84,10 +92,12 @@ TRACEPOINT_PROBE(sched, sched_switch) {
     if (start_ns) {
         u64 delta = ts - *start_ns;
         // why do you use a different command here lookup => lookup_or_try_init ?
+        // Because the value can not exist here
         u64 *total_ns = cpu_time_ns.lookup_or_try_init(&prev_pid, &delta);
         if (total_ns) {
             *total_ns += delta;
             // do you not need to write total_ns somewhere?
+            // It is saved by the pointer
         }
         start_time.delete(&prev_pid);
     } else {
@@ -99,6 +109,7 @@ TRACEPOINT_PROBE(sched, sched_switch) {
 
     // Record the start time for the task being switched in
     // This call is relevant for including or excluding the overhead of this eBPF script and is somehow in nowhere land ... Neither as early as possible, nor as late as possible. Where is it placed best? Does the event happen AFTER being scheduled on the CPU or BEFORE. In the former case I would argue to push this call to the end of the function. In the latter I would push it more to the start.
+    // True, I just wanted things that belong togehter to be at the same place in the code
     start_time.update(&next_pid, &ts);
 
     // Increment wakeup count for the task being switched in
@@ -111,8 +122,10 @@ TRACEPOINT_PROBE(sched, sched_switch) {
     }
 
     // what is coming out of bpf_get_current_task? A void pointer? suprising that you have to cast here
+    // https://github.com/iovisor/bcc/blob/master/docs/reference_guide.md#7-bpf_get_current_task
     struct task_struct *task = (struct task_struct *)bpf_get_current_task();
      if ((task->flags & PF_KTHREAD) == 0) { // what does this line mean?
+         // It checks if this is a kernel thread
         u32 pid = task->pid;
         u64 zero = 0;
         u64 *mem_usage = mem_usage_bytes.lookup_or_try_init(&pid, &zero);
