@@ -60,7 +60,7 @@ $(document).ready(function() {
             dataType: 'json',
             success: function(response) {
                 if (response.length != 0){
-                    updateChartOptions(response.energy_impact);
+                    updateChartOptions(response);
                 }
             },
             error: error
@@ -108,6 +108,9 @@ $(document).ready(function() {
 
     function createTable(table_data){
 
+        // We need filter down the data somehow as otherwise the table becomes to large
+        table_data = table_data.filter(item => item.energy_impact !== 0.0);
+
         table.clear();
         table.rows.add(table_data);
         table.draw(); // Redraw the table to display the new data
@@ -131,11 +134,13 @@ $(document).ready(function() {
 
     }
 
+    // Function to format epoch time to a readable format
     function formatTime(epochTime) {
-        var date = new Date(epochTime * 1000);
-        return date.toLocaleTimeString();
+        var date = new Date(epochTime * 1000); // Convert to milliseconds
+        return date.toLocaleString(); // Customize the format as needed
     }
 
+    // Function to prepare chart data for a single series
     function prepareChartData(dataObject) {
         // Create an array to hold the time-value pairs
         var dataArray = [];
@@ -155,6 +160,7 @@ $(document).ready(function() {
             }
         }
 
+        // Sort the data by epochTime
         dataArray.sort(function(a, b) {
             return a.epochTime - b.epochTime;
         });
@@ -172,31 +178,104 @@ $(document).ready(function() {
     }
 
     function updateChartOptions(dataObject) {
-        var chartData = prepareChartData(dataObject);
+        var series = [];
+        var yAxes = [];
+        var colorPalette = ['#5470C6', '#91CC75', '#EE6666', '#FAC858', '#73C0DE', '#3BA272', '#FC8452'];
+        var colorIndex = 0;
+
+        if (!dataObject.energy_impact) {
+            console.error("Missing 'energy_impact' data.");
+            return;
+        }
+
+        var energyData = prepareChartData(dataObject.energy_impact);
+
+        yAxes.push({
+            type: 'value',
+            name: 'Energy Impact Sum',
+            position: 'left',
+            axisLine: {
+                lineStyle: {
+                    color: colorPalette[colorIndex]
+                }
+            },
+        });
+
+        series.push({
+            name: 'Energy Impact Sum',
+            type: 'line',
+            data: energyData.values,
+            smooth: true,
+            yAxisIndex: 0,
+            color: colorPalette[colorIndex]
+        });
+
+        colorIndex++;
+
+        // Iterate over other keys in dataObject to add optional series
+        for (var key in dataObject) {
+            if (dataObject.hasOwnProperty(key) && key !== 'energy_impact') {
+                var chartData = prepareChartData(dataObject[key]);
+
+                yAxes.push({
+                    type: 'value',
+                    name: key,
+                    position: 'right',
+                    offset: (colorIndex - 1) * 60,
+                    axisLine: {
+                        lineStyle: {
+                            color: colorPalette[colorIndex % colorPalette.length]
+                        }
+                    },
+                });
+
+                series.push({
+                    name: key,
+                    type: 'line',
+                    data: chartData.values,
+                    smooth: true,
+                    yAxisIndex: yAxes.length - 1,
+                    color: colorPalette[colorIndex % colorPalette.length]
+                });
+
+                colorIndex++;
+            }
+        }
 
         var option = {
             title: {
-                text: 'Energy Impact Over Time'
+                text: 'Energy Impact and Other Metrics Over Time'
             },
+            toolbox: {
+                show: true,
+                feature: {
+                  dataZoom: {
+                    yAxisIndex: 'none'
+                  },
+                  dataView: { readOnly: false },
+                  magicType: { type: ['line', 'bar'] },
+                  restore: {},
+                  saveAsImage: {}
+                }
+              },
+
             tooltip: {
                 trigger: 'axis'
             },
+            legend: {
+                data: series.map(function(s) { return s.name; })
+            },
             xAxis: {
                 type: 'category',
-                data: chartData.times,
+                data: energyData.times,
                 name: 'Time',
                 boundaryGap: false
             },
-            yAxis: {
-                type: 'value',
-                name: 'Energy Impact Sum'
+            yAxis: yAxes,
+            series: series,
+            grid: {
+                containLabel: true
             },
-            series: [{
-                name: 'Energy Impact Sum',
-                type: 'line',
-                data: chartData.values,
-                smooth: true
-            }]
         };
 
         chart.setOption(option);

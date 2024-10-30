@@ -153,18 +153,22 @@ class DB():
         else:
             index = 0
 
-        time_data = {}
-        rapl_data = {}
+        time_data = {
+            'energy_impact': {}
+        }
         for item in self.data[index:]:
-            if item['current_time'] not in time_data:
-                time_data[item['current_time']] = 0
+            if item['current_time'] not in time_data['energy_impact']:
+                time_data['energy_impact'][item['current_time']] = 0
 
             for process in item['data']:
-                time_data[item['current_time']] += process['energy_impact']
+                time_data['energy_impact'][item['current_time']] += process['energy_impact']
 
-            rapl_data[item['current_time']] = item['rapl']
+            for p, v in item['rapl'].items():
+                if p not in time_data:
+                    time_data[p] = {}
+                time_data[p][item['current_time']] = v
 
-        return json.dumps({'energy_impact': time_data, 'rapl_data': rapl_data})
+        return json.dumps(time_data)
 
 
     def add_data(self, data_to_add):
