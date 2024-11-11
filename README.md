@@ -29,7 +29,7 @@ If you want to use this feature you will need to install `gcc` on your machine a
 
 ## Screenshot
 
-![How it looks](Screenshot.png "Powerletrics in action")
+![How it looks](Screenshot.png "PowerLetrics in action")
 
 ## Parameters
 
@@ -100,7 +100,7 @@ If you want to use this feature you will need to install `gcc` on your machine a
 ## Weights for energy impact
 
 When calculating the energy impact each value is multiplied with a `weight` these are different for each machine. You
-can modify them in the `config.conf` file.
+can modify them in the `config.conf` or `/etc/powerletrics` file.
 
 ## Tips:
 

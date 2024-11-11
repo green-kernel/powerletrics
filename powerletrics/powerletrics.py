@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+
 import bisect
 from collections import defaultdict
 import json
@@ -14,15 +15,27 @@ import http.server
 import socketserver
 import subprocess
 from urllib.parse import parse_qs, urlparse
+import importlib.resources
 
 from bcc import BPF
 
+def is_root():
+    return os.geteuid() == 0
+
+def run_as_root():
+    if not is_root():
+        print("This script requires root privileges. Attempting to re-run with sudo...")
+        try:
+            cmd = ['sudo', sys.executable] + sys.argv
+            os.execvp('sudo', cmd)
+        except Exception as e:
+            print(f"Failed to re-execute script as root: {e}")
+            sys.exit(1)
 
 # We need to run as root. Otherwise we don't need to do anything
-if os.geteuid() != 0:
-    print("This script must be run as root. Please use sudo")
-    sys.exit(1)
+run_as_root()
 
+current_dir = os.path.dirname(os.path.abspath(__file__))
 
 # Define the struct to match `pid_comm_t` in eBPF
 class PidComm(ctypes.Structure):
@@ -56,8 +69,8 @@ parser.add_argument('-s', '--server', action='store_true', help='Starts a local 
 parser.add_argument('--port', type=int, default=9242, help='The port to run the server on')
 parser.add_argument('--host', default='localhost', help='The host to run the server on')
 
-parser.add_argument('--rapl', action='store_true', help='Gets the CPU energy with RAPL')
-parser.add_argument('--psys', action='store_true', help='Gets the machine energy with RAPL')
+parser.add_argument('--rapl', action='store_true', help='Gets the CPU energy with RAPL. You will need to run make to use this feature')
+parser.add_argument('--psys', action='store_true', help='Gets the machine energy with RAPL. You will need to run make to use this feature')
 parser.add_argument('--rapl-sample-rate', type=int, default=500, help='Sample every N ms [default: 500ms]')
 
 
@@ -66,11 +79,15 @@ args = parser.parse_args()
 if args.output_file:
     sys.stdout = open(args.output_file, 'w')
 
-with open("ebpf_python.c", 'r') as f:
-    bpf_program = f.read()
+with open(os.path.join(current_dir, 'ebpf_python.c'), 'r') as ebpf_file:
+    bpf_program = ebpf_file.read()
 
 config = configparser.ConfigParser()
-config.read('config.conf')
+
+if os.path.isfile('/etc/powerletrics'):
+    config.read('/etc/powerletrics')
+else:
+    config.read(os.path.join(current_dir, 'config.conf'))
 
 # The energy impact score is calculated based on weights.
 # The basic formula is (metric0*weight) + (metric1*weight) + ...
@@ -205,7 +222,7 @@ def rapl_metrics_provider_thread(interval, params, stop_event):
     binary = './providers/rapl/metric-provider-binary'
 
     if not os.path.isfile(binary):
-        print('Could not find metric provider bin. Did you run make?')
+        print('Could not find metric provider bin. Did you run $ make?')
         stop_event.set()
         sys.exit(1)
 
@@ -241,7 +258,6 @@ def rapl_metrics_provider_thread(interval, params, stop_event):
             else:
                 time.sleep(0.1)
     finally:
-        # Terminate the metrics provider process if it's still running
         if metrics_process.poll() is None:
             print("Terminating metrics provider process...")
             metrics_process.terminate()
@@ -250,15 +266,6 @@ def rapl_metrics_provider_thread(interval, params, stop_event):
             except subprocess.TimeoutExpired:
                 print("Metrics provider did not terminate, killing it.")
                 metrics_process.kill()
-
-def parse_metrics_output(output):
-    # Implement your parsing logic here
-    try:
-        # Example parsing: convert output to float
-        return float(output)
-    except ValueError:
-        print(f"Invalid output from metrics provider: {output}")
-        return None
 
 def print_text(args, data_list, current_time, elapsed_time_ms, rapl_energy_sums):
     print(f"\n*** Sampled system activity ({current_time}) ({elapsed_time_ms:.2f}ms elapsed) ***\n")
@@ -315,7 +322,7 @@ def print_text(args, data_list, current_time, elapsed_time_ms, rapl_energy_sums)
     if args.flush:
         print('', flush=True)
 
-def print_xml(args, data_list, current_time, elapsed_time_ms):
+def print_xml(args, data_list, current_time, elapsed_time_ms, rapl_energy_sums):
     import plistlib
 
     plist_data = []
@@ -347,6 +354,9 @@ def print_xml(args, data_list, current_time, elapsed_time_ms):
 
         if args.show_command_line or args.show_all:
             data_dict['Command Line'] = data.cmdline
+
+        for p, r in sorted(rapl_energy_sums.items()):
+            data_dict[f"RAPL energy ({p})"] = r
 
         plist_data.append(data_dict)
 
@@ -424,7 +434,6 @@ def get_data(stop_event):
 
         current_sample = 0
 
-        # Print header
         if not args.output_file:
             print("Starting powerletrics monitoring. Press Ctrl+C to stop.")
 
@@ -567,7 +576,7 @@ import os
 
 class LittleServer(http.server.SimpleHTTPRequestHandler):
     def __init__(self, *args, **kwargs):
-        self.directory = 'http'
+        self.directory = os.path.join(current_dir,'http')
         super().__init__(*args, directory=self.directory, **kwargs)
 
     def do_GET(self):
@@ -593,8 +602,6 @@ class LittleServer(http.server.SimpleHTTPRequestHandler):
             self.send_json_data(response_data)
             return
 
-
-
         return super().do_GET()
 
     def send_json_data(self, data_to_send):
@@ -604,7 +611,6 @@ class LittleServer(http.server.SimpleHTTPRequestHandler):
         self.wfile.write(data_to_send.encode('utf-8'))
 
     def end_headers(self):
-        # Add headers to prevent caching
         self.send_header("Cache-Control", "no-cache, no-store, must-revalidate")
         self.send_header("Pragma", "no-cache")
         self.send_header("Expires", "0")
@@ -632,7 +638,7 @@ if __name__ == '__main__':
             try:
                 httpd.serve_forever()
             except KeyboardInterrupt:
-                print("Shutting down server...")
+                print("Shutting down server. Please be patient, this might take some time...")
                 stop_event.set()
                 httpd.shutdown()
                 httpd.server_close()

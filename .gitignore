@@ -1,2 +1,5 @@
 perf_junk
 .vscode
+dist
+powerletrics.egg-info
+venv

@@ -1,0 +1,5 @@
+include LICENSE
+include README.md
+exclude **/*.o
+exclude **/*.pyc
+recursive-include powerletrics *

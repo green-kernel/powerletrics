@@ -1,0 +1,36 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "powerletrics"
+version = "0.0.1"
+authors = [
+  { name="Didi Hoffmann", email="powerletrics@ribalba.de" },
+]
+description = "A program that brings power estimation per process to your Linux system"
+readme = "README.md"
+license = { file = "LICENSE" }
+requires-python = ">=3.11"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Development Status :: 2 - Pre-Alpha",
+    "Environment :: Console",
+    "License :: OSI Approved :: GNU Affero General Public License v3 or later (AGPLv3+)",
+]
+
+[project.scripts]
+powerletrics = "powerletrics.powerletrics:main"
+
+[tool.setuptools.packages.find]
+include = ["powerletrics*"]
+
+[tool.setuptools.package-data]
+"powerletrics" = ["**/*"]
+
+[tool.setuptools]
+include-package-data = true
+
+[project.urls]
+Homepage = "https://github.com/green-kernel/powerletrics"
+Issues = "https://github.com/green-kernel/powerletrics/issues"
