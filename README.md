@@ -1,7 +1,9 @@
-# powermetrics on 🐧 so powerletrics
+# powermetrics on 🐧 => powerletrics
 
-This project tries to copy the powermetrics program under mac but brings the functionality to Linux.
-This is still very early on in development. Please test and submit an issue.
+PowerLetrics is an open-source framework designed to monitor and analyze power consumption metrics at the process level on Linux. Similar to how `top` displays memory or CPU time, PowerLetrics provides the "Energy Footprint" of each process in real-time. This project is still in the early stages of development. Please test it and submit any issues.
+
+This project is heavily influenced by the `powermetrics` program on macOS.
+
 
 ## Install and run
 
