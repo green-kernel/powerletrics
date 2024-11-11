@@ -71,16 +71,6 @@ $(document).ready(function() {
     }
 
     function createDropdown(){
-        var $dropdownMenu = $('#column-selector .menu');
-        $dropdownMenu.empty(); // Clear any existing items
-
-        allColumns.forEach(function(column, index) {
-            var $item = $('<div class="item"></div>')
-                .attr('data-value', index)
-                .text(column.title);
-            $dropdownMenu.append($item);
-        });
-
         $('#column-selector').dropdown({
             onChange: function(value, text, $selectedItem) {
                 var selectedColumns = value ? value.split(',').map(Number) : [];
@@ -124,13 +114,13 @@ $(document).ready(function() {
         $('#update_progress').progress({
             total: totalSteps,
         });
-        // var progressInterval = setInterval(function() {
-        //     $('#update_progress').progress('increment');
-        //     var currentValue = $('#update_progress').progress('get value');
-        //     if (currentValue >= totalSteps) {
-        //         $('#update_progress').progress('reset');
-        //     }
-        // }, BAR_INTERVAL);
+        var progressInterval = setInterval(function() {
+            $('#update_progress').progress('increment');
+            var currentValue = $('#update_progress').progress('get value');
+            if (currentValue >= totalSteps) {
+                $('#update_progress').progress('reset');
+            }
+        }, BAR_INTERVAL);
 
     }
 
@@ -283,10 +273,12 @@ $(document).ready(function() {
 
     var chart = echarts.init(document.getElementById('main_chart'));
 
-    createDropdown()
+    createDropdown();
 
     setInterval(fetchData, UPDATE_TIME);
-    setProgress()
+
+    // We don't do this as it uses quite a lot of CPU
+    //setProgress();
 
     fetchData();
 });

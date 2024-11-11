@@ -4,7 +4,6 @@ from collections import defaultdict
 import json
 import os
 import argparse
-import queue
 import threading
 import time
 import sys
@@ -54,9 +53,7 @@ parser.add_argument('--proc-memory', action='store_true', help='Disables eBPF me
 parser.add_argument('-f', '--flush', action='store_true', help='Flushes after print')
 
 parser.add_argument('-s', '--server', action='store_true', help='Starts a local server to view the data in a browser')
-parser.add_argument('-d', '--demon', action='store_true', help='Runs the program in demon mode')
-
-parser.add_argument('--port', type=int, default=9142, help='The port to run the server on')
+parser.add_argument('--port', type=int, default=9242, help='The port to run the server on')
 parser.add_argument('--host', default='localhost', help='The host to run the server on')
 
 parser.add_argument('--rapl', action='store_true', help='Gets the CPU energy with RAPL')
@@ -69,13 +66,17 @@ args = parser.parse_args()
 if args.output_file:
     sys.stdout = open(args.output_file, 'w')
 
-with open("ebpf.c", 'r') as f:
+with open("ebpf_python.c", 'r') as f:
     bpf_program = f.read()
 
 config = configparser.ConfigParser()
-config.read('weights.conf')
+config.read('config.conf')
 
-# Weights for each component
+# The energy impact score is calculated based on weights.
+# The basic formula is (metric0*weight) + (metric1*weight) + ...
+# So the weights depend on the machine you are running on if you want to get the energy impact as close as possible
+# to actual energy usage. In the settings file we used the default MacOS weights. If there is no config file we use
+# cpu time and ignore the rest.
 CPU_WEIGHT = float(config['Weights'].get('CPU_WEIGHT', 1))
 WAKEUP_WEIGHT = float(config['Weights'].get('WAKEUP_WEIGHT', 0))
 DISK_WRITE_WEIGHT = float(config['Weights'].get('DISK_WRITE_WEIGHT', 0))
@@ -358,7 +359,8 @@ def print_xml(args, data_list, current_time, elapsed_time_ms):
         if args.flush:
             print('', flush=True)
 
-class Data:
+class BPFData:
+
     def __init__(self):
         self.pid = -1
         self.comm = ""
@@ -386,7 +388,8 @@ class Data:
 
     def energy_impact(self):
         if self.pid == 0:
-            # We can't really assign a value to the system being idle on one to n cores
+            # We can't really assign a value to the system being idle on one to n cores. Modern CPUs will go in a
+            # sleep state when they are not used and it is quite hard to estimate the impact this has.
             return 0
 
         return (CPU_WEIGHT * self.cpu_utilization()) + \
@@ -430,6 +433,7 @@ def get_data(stop_event):
             start_loop_time = datetime.datetime.now()
 
             # This needs refactoring at some stage as if you press CTRL-C while in the sleep the process will not exit
+            # right away
             time.sleep(sample_interval_sec)
 
             # Retrieve data from eBPF maps
@@ -448,7 +452,7 @@ def get_data(stop_event):
             for pid_key in cpu_times.keys():
 
                 pid = pid_key.value
-                data = Data()
+                data = BPFData()
                 data.pid = pid
                 data.cpu_time_ns = cpu_times[pid_key].value
                 data.cpu_wakeups = wakeups[pid_key].value if pid_key in wakeups else 0

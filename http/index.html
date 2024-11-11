@@ -1,9 +1,9 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Powerletrics Dashboard</title>
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/fomantic-ui@2.9.3/dist/semantic.min.css">
-    <link href="https://cdn.datatables.net/v/se/dt-2.1.8/cr-2.0.4/fh-4.0.1/kt-2.12.1/r-3.0.3/sc-2.4.3/datatables.min.css" rel="stylesheet">
+    <title>PowerLetrics Dashboard</title>
+    <link rel="stylesheet" href="/static/semantic.min.css">
+    <link rel="stylesheet" href="/static/datatables.min.css">
 </head>
 
 <body>
@@ -12,7 +12,7 @@
         <div class="ui menu">
             <a class="item" href="/">
               <img class="ui mini image" src="logo.png">&NonBreakingSpace;
-              Powerletrics
+              PowerLetrics
             </a>
             <a class="item" target="_blank" href="https://github.com/green-kernel/powerletrics/blob/main/README.md">
                 <i class="book icon"></i>
@@ -22,9 +22,16 @@
                 <i class="github icon"></i>
                 GitHub
             </a>
-          </div>
-
-
+            <!-- <div class="right menu">
+                <div class="ui right aligned category search item">
+                  <div class="ui transparent icon input">
+                    <input class="prompt" type="text" placeholder="Search animals...">
+                    <i class="search link icon"></i>
+                  </div>
+                  <div class="results"></div>
+                </div>
+            </div> -->
+        </div>
 
         <div class="ui info icon message">
             <i class="info circle icon"></i>
@@ -36,67 +43,13 @@
             </div>
         </div>
 
-        <div class="ui segment">
+        <!-- <div class="ui segment">
 
             <div id="update_progress" class="ui top attached progress">
                 <div class="bar"></div>
               </div>
 
-            <div class="ui four cards stackable">
-
-                <div class="ui card phase-duration">
-                    <div class="ui content">
-                        <div class="ui top attached blue label overflow-ellipsis">Energy Impact Sum</div>
-                        <div class="description">
-                            <div class="ui fluid mini statistic">
-                                <div class="value" id="energy_impact_sum">
-                                    300.07
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-                <div class="ui card phase-duration">
-                    <div class="ui content">
-                        <div class="ui top attached blue label overflow-ellipsis">Energy used last hour <span class="si-unit">[mWH]</span></div>
-                        <div class="description">
-                            <div class="ui fluid mini statistic">
-                                <div class="value">
-                                    300.07
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="ui card phase-duration">
-                    <div class="ui content">
-                        <div class="ui top attached orange label overflow-ellipsis">Top process 5 min <span class="si-unit">[mWH]</span></div>
-                        <div class="description">
-                            <div class="ui fluid mini statistic">
-                                <div class="value">
-                                    Python
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="ui card phase-duration">
-                    <div class="ui content">
-                        <div class="ui top attached orange label overflow-ellipsis">Top process last hour <span class="si-unit">[mWH]</span></div>
-                        <div class="description">
-                            <div class="ui fluid mini statistic">
-                                <div class="value">
-                                    code
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-            </div>
-        </div>
+        </div> -->
 
         <!--
         - How long the process has been running
@@ -137,10 +90,10 @@
         </div>
     </div>
 </body>
-<script src="jquery-3.7.1.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/fomantic-ui@2.9.3/dist/semantic.min.js"></script>
-<script src="https://cdn.datatables.net/v/se/dt-2.1.8/cr-2.0.4/fh-4.0.1/kt-2.12.1/r-3.0.3/sc-2.4.3/datatables.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/echarts@5.5.1/dist/echarts.min.js"></script>
+<script src="/static/jquery-3.7.1.min.js"></script>
+<script src="/static/semantic.min.js"></script>
+<script src="/static/datatables.min.js"></script>
+<script src="/static/echarts.min.js"></script>
 <script src="script.js"></script>
 </html>
 

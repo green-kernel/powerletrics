@@ -9,14 +9,23 @@ You need to install bcc on your system which should include all the python bindi
 
 https://github.com/iovisor/bcc/blob/master/INSTALL.md
 
+If you want to use rapl you need to `make` the reports first
+
 You can then run the program from the shell with sudo
-```
+
+```bash
 sudo python3 powerletrics.py -i 1000 --show-all
 ```
 
 ### CPU Energy
 
-There is also the option to get the CPU energy from RAPL. You can activate this with ``--rapl``
+There is also the option to get the CPU energy from RAPL. You can activate this with ``--rapl``.
+
+If your computer support it you can also get the PSYS energy with ``--psys``.
+
+We don't enable this by default as we want to make the program runnable in a VM so people can test it easily and we want the default to work in all environments.
+
+If you want to use this feature you will need to install `gcc` on your machine and build the tools with `make`
 
 ## Screenshot
 
@@ -47,14 +56,14 @@ There is also the option to get the CPU energy from RAPL. You can activate this 
 ### `--show-all`
 - **Description**: Enables all available samplers and shows all the information from each one. This includes process energy impact, I/O stats, and network stats.
 
-### `--show-process-energy`
-- **Description**: Displays an estimated energy impact for each process. This is a rough estimate combining CPU, disk, and network usage. Enabling this flag automatically enables sampling for all the relevant per-process statistics (CPU, I/O, and network).
-
 ### `--show-process-io`
 - **Description**: Displays per-process I/O statistics, such as disk read and write bytes.
 
 ### `--show-process-netstats`
 - **Description**: Displays per-process network statistics, including the number of received and transmitted network packets.
+
+### `--show-command-line`
+- **Description**: Displays the full command-line arguments for each process.
 
 ### `--format`
 - **Choices**: `text`, `plist`
@@ -63,22 +72,37 @@ There is also the option to get the CPU energy from RAPL. You can activate this 
   - `text`: Human-readable text format.
   - `plist`: Property list (XML) format, useful for programmatic analysis.
 
-### `--ebpf-memory`
-- **Description**: Enables eBPF memory sampling for gathering memory usage statistics. This offers an alternative way of collecting memory usage via eBPF.
-
-### `--show-command-line`
-- **Description**: Displays the full command-line arguments for each process.
+### `--proc-memory`
+- **Description**: The default mode is to get memory using ebpf. If this doesn't work you can also use the memory from the proc filesystem. This will be slower as for every process we need to open the /proc file and parse it.
 
 ### `--flush`
 - **Description**: Forces flushing of the output after each print. This is useful when writing output to files or when immediate display is necessary.
+
+### `-s`
+- **Description**: Starts a little webserver that serves a page to show you a nice representation of the data.
+
+### `--port`
+- **Description**: The port to bind the webserver to. Defaults to 9242
+
+### `--host`
+- **Description**: The host to run the webserver on. Defaults to localhost. Use 0.0.0.0 if you want to listen to the whole world.
+
+### `--rapl`
+- **Description**: If you want to get the energy data from the CPU
+
+### `--psys`
+- **Description**: If you want to get the energy data for your machine
+
+### `rapl-sample-rate`
+- **Description**: How often you want rapl and psys to get the data. Defaults to 500ms
 
 
 ## Weights for energy impact
 
 When calculating the energy impact each value is multiplied with a `weight` these are different for each machine. You
-can modify them in the `weights.conf` file.
+can modify them in the `config.conf` file.
 
-## Tips.
+## Tips:
 
 ### Terminal wraps because of long command line paramters
 Execute this before starting the program
@@ -94,4 +118,4 @@ Because we use `Total Virtual Memory` instead of `Resident Set Size`
 Only programs that have run are listed as they are the only ones that have actually used something.
 
 ### Why don't you use psutil
-Because it does the same things (yes we check) and is slower as it adds more overhead. We still 😍 psutil though
+Because it does the same things (yes we check) and is slower as it adds more overhead. We still 😍 psutil though.
