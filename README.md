@@ -7,16 +7,18 @@ This project is heavily influenced by the `powermetrics` program on macOS.
 
 ## Install and run
 
-You need to install bcc on your system which should include all the python bindings
+1. You need to install bcc on your system which should include all the python bindings
 
 https://github.com/iovisor/bcc/blob/master/INSTALL.md
 
-If you want to use rapl you need to `make` the reports first
+2. You can then install the program with `pip install powerletrics`. Please note that if you are using a `venv` you will need to create it with `--system-site-packages` as otherwise we don't have access to the bcc libs
 
-You can then run the program from the shell with sudo
+3. If you want to use *RAPL* and *PSYS* data you need to build the binaries. You will need `gcc` and `make` on your system.
+PowerLetrics will try and build everything on the first run for you.
 
+4. You can then run the program from the shell:
 ```bash
-sudo python3 powerletrics.py -i 1000 --show-all
+powerletrics -i 1000 --show-all
 ```
 
 ### CPU Energy
