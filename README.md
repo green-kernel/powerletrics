@@ -33,6 +33,11 @@ If you want to use this feature you will need to install `gcc` on your machine a
 
 ![How it looks](Screenshot.png "PowerLetrics in action")
 
+## Screenshot with server
+
+![How the HTML server looks](Screenshot_Server.png "PowerLetrics bundled HTML server")
+
+
 ## Parameters
 
 ### `-i` / `--sample-rate`
@@ -80,8 +85,8 @@ If you want to use this feature you will need to install `gcc` on your machine a
 ### `--flush`
 - **Description**: Forces flushing of the output after each print. This is useful when writing output to files or when immediate display is necessary.
 
-### `-s`
-- **Description**: Starts a little webserver that serves a page to show you a nice representation of the data.
+### `--server`
+- **Description**: Start a webserver running @ http://localhost:9242 that displays data in nice HTML format with charts! Did we say charts already?!
 
 ### `--port`
 - **Description**: The port to bind the webserver to. Defaults to 9242
@@ -95,8 +100,9 @@ If you want to use this feature you will need to install `gcc` on your machine a
 ### `--psys`
 - **Description**: If you want to get the energy data for your machine
 
-### `rapl-sample-rate`
+### `--rapl-sample-rate`
 - **Description**: How often you want rapl and psys to get the data. Defaults to 500ms
+
 
 
 ## Weights for energy impact
@@ -104,7 +110,7 @@ If you want to use this feature you will need to install `gcc` on your machine a
 When calculating the energy impact each value is multiplied with a `weight` these are different for each machine. You
 can modify them in the `config.conf` or `/etc/powerletrics` file.
 
-## Tips:
+## FAQ and Tips:
 
 ### Terminal wraps because of long command line paramters
 Execute this before starting the program
