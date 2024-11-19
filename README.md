@@ -85,8 +85,8 @@ If you want to use this feature you will need to install `gcc` on your machine a
 ### `--flush`
 - **Description**: Forces flushing of the output after each print. This is useful when writing output to files or when immediate display is necessary.
 
-### `-s`
-- **Description**: Starts a little webserver that serves a page to show you a nice representation of the data.
+### `--server`
+- **Description**: Start a webserver running @ http://localhost:9242 that displays data in nice HTML format with charts! Did we say charts already?!
 
 ### `--port`
 - **Description**: The port to bind the webserver to. Defaults to 9242
@@ -103,8 +103,6 @@ If you want to use this feature you will need to install `gcc` on your machine a
 ### `--rapl-sample-rate`
 - **Description**: How often you want rapl and psys to get the data. Defaults to 500ms
 
-### `--server`
-- **Description**: Start a webserver running @ http://localhost:9242 that displays data in nice HTML format with charts! Did we say charts already?!
 
 
 ## Weights for energy impact
