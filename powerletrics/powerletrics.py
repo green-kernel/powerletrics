@@ -550,6 +550,7 @@ def get_data(stop_event):
                 })
             else:
                 if args.format == 'text':
+                    print("\033c", end="")
                     print_text(args, data_list, current_time, elapsed_time_ms, rapl_energy_sums)
                 else:
                     print_xml(args, data_list, current_time, elapsed_time_ms, rapl_energy_sums)
