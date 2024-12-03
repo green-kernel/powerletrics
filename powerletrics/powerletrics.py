@@ -53,7 +53,7 @@ parser.add_argument('-r', '--order', type=str, choices=['pid', 'wakeups', 'cputi
 parser.add_argument('-A', '--show-all', action='store_true',
                     help='Enables all samplers and displays all the available information for each sampler.')
 # parser.add_argument('--show-process-energy', action='store_true',
-#                     help='''Show per-process energy impact number. This number is a rough
+#                     help='''Show per-process energy footprint number. This number is a rough
 #                             proxy for the total energy the process uses, including CPU,
 #                             disk io and networking. The weighting of each is platform
 #                             specific. Enabling this implicitly enables sampling of all the
@@ -89,9 +89,9 @@ if os.path.isfile('/etc/powerletrics'):
 else:
     config.read(os.path.join(current_dir, 'config.conf'))
 
-# The energy impact score is calculated based on weights.
+# The energy footprint score is calculated based on weights.
 # The basic formula is (metric0*weight) + (metric1*weight) + ...
-# So the weights depend on the machine you are running on if you want to get the energy impact as close as possible
+# So the weights depend on the machine you are running on if you want to get the energy footprint as close as possible
 # to actual energy usage. In the settings file we used the default MacOS weights. If there is no config file we use
 # cpu time and ignore the rest.
 CPU_WEIGHT = float(config['Weights'].get('CPU_WEIGHT', 1))
@@ -122,7 +122,7 @@ class DB():
         numeric_fields = [
             'cpu_time_ns', 'cpu_wakeups', 'memory_usage', 'memory_usage_mb',
             'net_rx_packets', 'net_tx_packets', 'disk_read_bytes', 'disk_write_bytes',
-            'cpu_utilization', 'energy_impact'
+            'cpu_utilization', 'energy_footprint'
         ]
 
         pid_map = defaultdict(lambda: {field: 0 for field in numeric_fields})
@@ -154,7 +154,7 @@ class DB():
         pid_array = []
         for pid, process_data in pid_map.items():
             for field in numeric_fields:
-                if field == 'cpu_utilization' or field == 'energy_impact':
+                if field == 'cpu_utilization' or field == 'energy_footprint':
                     process_data[field] = process_data[field] / len(ddata)
 
                 if isinstance(process_data[field], float):
@@ -172,14 +172,14 @@ class DB():
             index = 0
 
         time_data = {
-            'energy_impact': {}
+            'energy_footprint': {}
         }
         for item in self.data[index:]:
-            if item['current_time'] not in time_data['energy_impact']:
-                time_data['energy_impact'][item['current_time']] = 0
+            if item['current_time'] not in time_data['energy_footprint']:
+                time_data['energy_footprint'][item['current_time']] = 0
 
             for process in item['data']:
-                time_data['energy_impact'][item['current_time']] += process['energy_impact']
+                time_data['energy_footprint'][item['current_time']] += process['energy_footprint']
 
             for p, v in item['rapl'].items():
                 if p not in time_data:
@@ -271,7 +271,7 @@ def print_text(args, data_list, current_time, elapsed_time_ms, rapl_energy_sums)
     print(f"\n*** Sampled system activity ({current_time}) ({elapsed_time_ms:.2f}ms elapsed) ***\n")
     print("*** Running tasks ***\n")
 
-    headers = ['PID', 'Name', 'Energy Impact', 'CPU Utilization (%)', 'CPU Time (ns)', 'CPU Wakeups', 'Memory Usage (MB)']
+    headers = ['PID', 'Name', 'Energy Footprint', 'CPU Utilization (%)', 'CPU Time (ns)', 'CPU Wakeups', 'Memory Usage (MB)']
     if args.show_process_io or args.show_all:
         headers.extend(['Disk Read Bytes', 'Disk Write Bytes'])
     if args.show_process_netstats or args.show_all:
@@ -282,7 +282,7 @@ def print_text(args, data_list, current_time, elapsed_time_ms, rapl_energy_sums)
     # Initialize the list of rows
     rows = []
     for data in data_list:
-        row = [data.pid, data.comm, f"{data.energy_impact():.2f}", f"{data.cpu_utilization():.2f}", data.cpu_time_ns, data.cpu_wakeups]
+        row = [data.pid, data.comm, f"{data.energy_footprint():.2f}", f"{data.cpu_utilization():.2f}", data.cpu_time_ns, data.cpu_wakeups]
         if data.is_kernel_thread:
             row.append('-')
         else:
@@ -333,7 +333,7 @@ def print_xml(args, data_list, current_time, elapsed_time_ms, rapl_energy_sums):
             'Name': data.comm,
             'Current Time': current_time,
             'Elapsed Time': elapsed_time_ms,
-            'Energy Impact': data.energy_impact(),
+            'Energy footprint': data.energy_footprint(),
             'CPU Utilization (%)': data.cpu_utilization(),
             'CPU Time (ns)': data.cpu_time_ns,
             'CPU Wakeups': data.cpu_wakeups,
@@ -396,10 +396,10 @@ class BPFData:
 
         return (self.cpu_time_ns / (interval_ns * num_cpus)) * 100
 
-    def energy_impact(self):
+    def energy_footprint(self):
         if self.pid == 0:
             # We can't really assign a value to the system being idle on one to n cores. Modern CPUs will go in a
-            # sleep state when they are not used and it is quite hard to estimate the impact this has.
+            # sleep state when they are not used and it is quite hard to estimate the footprint this has.
             return 0
 
         return (CPU_WEIGHT * self.cpu_utilization()) + \
@@ -425,7 +425,7 @@ class BPFData:
             'disk_write_bytes': self.disk_write_bytes,
             'is_kernel_thread': self.is_kernel_thread,
             'cpu_utilization': self.cpu_utilization(),
-            'energy_impact': self.energy_impact()
+            'energy_footprint': self.energy_footprint()
         }
 
 def get_data(stop_event):
@@ -521,7 +521,7 @@ def get_data(stop_event):
             elif args.order == 'cputime':
                 data_list.sort(key=lambda x: x.cpu_time_ns, reverse=True)
             elif args.order == 'composite':
-                data_list.sort(key=lambda x: x.energy_impact(), reverse=True)
+                data_list.sort(key=lambda x: x.energy_footprint(), reverse=True)
 
 
             now = datetime.datetime.now()

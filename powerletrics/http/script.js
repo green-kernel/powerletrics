@@ -17,7 +17,7 @@ $(document).ready(function() {
         { data: 'disk_read_bytes', title: 'Disk Read (Bytes)' },
         { data: 'disk_write_bytes', title: 'Disk Write (Bytes)' },
         { data: 'cpu_utilization', title: 'Average CPU Utilization (%)' },
-        { data: 'energy_impact', title: 'Average Energy Impact' },
+        { data: 'energy_footprint', title: 'Average Energy Footprint' },
         { data: 'cmdline', title: 'Command Line' },
         { data: 'comm', title: 'Command' },
     ];
@@ -99,7 +99,7 @@ $(document).ready(function() {
     function createTable(table_data){
 
         // We need filter down the data somehow as otherwise the table becomes to large
-        table_data = table_data.filter(item => item.energy_impact !== 0.0);
+        table_data = table_data.filter(item => item.energy_footprint !== 0.0);
 
         table.clear();
         table.rows.add(table_data);
@@ -173,16 +173,16 @@ $(document).ready(function() {
         var colorPalette = ['#5470C6', '#91CC75', '#EE6666', '#FAC858', '#73C0DE', '#3BA272', '#FC8452'];
         var colorIndex = 0;
 
-        if (!dataObject.energy_impact) {
-            console.error("Missing 'energy_impact' data.");
+        if (!dataObject.energy_footprint) {
+            console.error("Missing 'energy_footprint' data.");
             return;
         }
 
-        var energyData = prepareChartData(dataObject.energy_impact);
+        var energyData = prepareChartData(dataObject.energy_footprint);
 
         yAxes.push({
             type: 'value',
-            name: 'Energy Impact Sum',
+            name: 'Energy Footprint Sum',
             position: 'left',
             axisLine: {
                 lineStyle: {
@@ -192,7 +192,7 @@ $(document).ready(function() {
         });
 
         series.push({
-            name: 'Energy Impact Sum',
+            name: 'Energy Footprint Sum',
             type: 'line',
             data: energyData.values,
             smooth: true,
@@ -204,7 +204,7 @@ $(document).ready(function() {
 
         // Iterate over other keys in dataObject to add optional series
         for (var key in dataObject) {
-            if (dataObject.hasOwnProperty(key) && key !== 'energy_impact') {
+            if (dataObject.hasOwnProperty(key) && key !== 'energy_footprint') {
                 var chartData = prepareChartData(dataObject[key]);
 
                 yAxes.push({
@@ -234,7 +234,7 @@ $(document).ready(function() {
 
         var option = {
             title: {
-                text: 'Energy Impact and Other Metrics Over Time'
+                text: 'Energy Footprint and Other Metrics Over Time'
             },
             toolbox: {
                 show: true,
