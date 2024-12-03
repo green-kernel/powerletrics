@@ -33,11 +33,11 @@ If you want to use this feature you will need to install `gcc` on your machine a
 
 ## Screenshot
 
-![How it looks](Screenshot.png "PowerLetrics in action")
+![How it looks](https://raw.githubusercontent.com/green-kernel/powerletrics/refs/heads/main/Screenshot.png "PowerLetrics in action")
 
 ## Screenshot with server
 
-![How the HTML server looks](Screenshot_Server.png "PowerLetrics bundled HTML server")
+![How the HTML server looks](https://raw.githubusercontent.com/green-kernel/powerletrics/refs/heads/main/Screenshot_Server.png "PowerLetrics bundled HTML server")
 
 
 ## Parameters
