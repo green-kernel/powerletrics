@@ -7,6 +7,8 @@
 BPF_HASH(start_time, u32, u64);
 BPF_HASH(cpu_wakeups, u32, u64);
 BPF_HASH(cpu_time_ns, u32, u64);
+BPF_HASH(ebpf_time_ns, u32, u64);
+
 BPF_HASH(mem_usage_bytes, u32, u64);
 BPF_HASH(net_rx_packets, u32, u64);
 BPF_HASH(net_tx_packets, u32, u64);
@@ -25,11 +27,38 @@ struct pid_comm_t {
 
 BPF_HASH(pid_comm_map, u32, struct pid_comm_t);
 
+
+TRACEPOINT_PROBE(power, cpu_idle) {
+    u32 cpu = args->cpu_id;
+    int state = args->state;
+    u64 ts = bpf_ktime_get_ns();
+
+    if (state >= 0) {
+        // CPU is entering idle state
+        idle_start_time_ns.update(&cpu, &ts);
+    } else if (state == -1) {
+        // CPU is exiting idle state
+        u64 *start_ns = idle_start_time_ns.lookup(&cpu);
+        if (start_ns) {
+            u64 delta = ts - *start_ns;
+            u64 zero = 0;
+            u64 *total_ns = idle_time_ns.lookup_or_try_init(&cpu, &zero);
+            if (total_ns) {
+                *total_ns += delta;
+            }
+            idle_start_time_ns.delete(&cpu);
+        }
+    }
+    return 0;
+}
+
+
 TRACEPOINT_PROBE(sched, sched_switch) {
     u32 prev_pid = args->prev_pid;
     u32 next_pid = args->next_pid;
     u64 ts = bpf_ktime_get_ns();
     u32 cpu = bpf_get_smp_processor_id();
+    u64 zero = 0;
 
     char prev_comm[TASK_COMM_LEN];
     char next_comm[TASK_COMM_LEN];
@@ -47,58 +76,52 @@ TRACEPOINT_PROBE(sched, sched_switch) {
     __builtin_memcpy(&prev_pid_comm.comm, &prev_comm, sizeof(prev_comm));
     pid_comm_map.update(&prev_pid, &prev_pid_comm);
 
-    // Handle the idle task being scheduled out
+    // We used to handle the idle time with pid 0 but having an own tracepoint was more reliable. Keeping this for referece
     if (prev_pid == 0) {
-        // Idle task is being scheduled out
-        u64 *start_ns = idle_start_time_ns.lookup(&cpu);
+    //     // cpu_time_ns.lookup_or_try_init(&prev_pid, &zero);
+    //     // u64 *start_ns = idle_start_time_ns.lookup(&cpu);
+    //     // if (start_ns) {
+    //     //     u64 delta = ts - *start_ns;
+    //     //     u64 *total_ns = idle_time_ns.lookup_or_try_init(&cpu, &zero);
+    //     //     if (total_ns) {
+    //     //         *total_ns += delta;
+    //     //     }
+    //     //     idle_start_time_ns.delete(&cpu);
+    //     // }
+    }else{
+        // Handle the task that is being switched out
+        u64 *start_ns = start_time.lookup(&prev_pid);
         if (start_ns) {
             u64 delta = ts - *start_ns;
-            u64 *total_ns = idle_time_ns.lookup(&cpu);
+            u64 *total_ns = cpu_time_ns.lookup_or_try_init(&prev_pid, &delta);
             if (total_ns) {
                 *total_ns += delta;
-            } else {
-                idle_time_ns.update(&cpu, &delta);
             }
-            idle_start_time_ns.delete(&cpu);
+            start_time.delete(&prev_pid);
+        } else {
+            u64 *total_ns = cpu_time_ns.lookup_or_try_init(&prev_pid, &zero);
         }
     }
 
     // Handle the idle task being scheduled in
     if (next_pid == 0) {
-        // Idle task is being scheduled in
-        idle_start_time_ns.update(&cpu, &ts);
+        // idle_start_time_ns.update(&cpu, &ts);
+    }else{
+        //Record the start time for the task being switched in
+        start_time.update(&next_pid, &ts);
     }
 
-
-    // Handle the task that is being switched out
-    u64 *start_ns = start_time.lookup(&prev_pid);
-    if (start_ns) {
-        u64 delta = ts - *start_ns;
-        u64 *total_ns = cpu_time_ns.lookup_or_try_init(&prev_pid, &delta);
-        if (total_ns) {
-            *total_ns += delta;
+    if(next_pid != 0){
+        // Increment wakeup count for the task being switched in
+        u64 *wakeup_count = cpu_wakeups.lookup_or_try_init(&next_pid, &zero);
+        if (wakeup_count) {
+            *wakeup_count += 1;
         }
-        start_time.delete(&prev_pid);
-    } else {
-        u64 zero = 0;
-        u64 *total_ns = cpu_time_ns.lookup_or_try_init(&prev_pid, &zero);
-    }
-
-
-    // Record the start time for the task being switched in
-    start_time.update(&next_pid, &ts);
-
-    // Increment wakeup count for the task being switched in
-    u64 zero = 0;
-    u64 *wakeup_count = cpu_wakeups.lookup_or_try_init(&next_pid, &zero);
-    if (wakeup_count) {
-        *wakeup_count += 1;
     }
 
     struct task_struct *task = (struct task_struct *)bpf_get_current_task();
      if ((task->flags & PF_KTHREAD) == 0) {
         u32 pid = task->pid;
-        u64 zero = 0;
         u64 *mem_usage = mem_usage_bytes.lookup_or_try_init(&pid, &zero);
         if (mem_usage) {
             struct mm_struct *mm = NULL;
@@ -108,6 +131,16 @@ TRACEPOINT_PROBE(sched, sched_switch) {
                 bpf_probe_read_kernel(&total_vm, sizeof(total_vm), &mm->total_vm);
                 *mem_usage = total_vm * PAGE_SIZE;
             }
+        }
+    }
+
+    if (prev_pid != 0) {
+        u64 end_ts = bpf_ktime_get_ns();
+        u64 duration = end_ts - ts;
+
+        u64 *total_ns = ebpf_time_ns.lookup_or_try_init(&prev_pid, &duration);
+        if (total_ns) {
+            *total_ns += duration;
         }
     }
 

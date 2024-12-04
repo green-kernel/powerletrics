@@ -68,13 +68,14 @@ If you want to use this feature you will need to install `gcc` on your machine a
         - `plist`: Property list (XML) format, useful for programmatic analysis.
 - `--proc-memory`: The default mode is to get memory using ebpf. If this doesn't work you can also use the memory from the proc filesystem. This will be slower as for every process we need to open the /proc file and parse it.
 - `-f` / `--flush`: Forces flushing of the output after each print. This is useful when writing output to files or when immediate display is necessary.
+- `-c` / `--clear`: Clears the shell on new data
 - `-s` / `--server`: Start a webserver running @ http://localhost:9242 that displays data in nice HTML format with charts! Did we say charts already?!
 - `--port`: The port to bind the webserver to. **Default**: 9242
 - `--host`: The host to run the webserver on. **Default**:localhost. Use 0.0.0.0 if you want to listen to the whole world.
 - `--rapl`: If you want to get the energy data from the CPU
 - `--psys`: If you want to get the energy data for your machine
 - `--rapl-sample-rate`: How often you want rapl and psys to get the data. Defaults to 500ms
-
+- `--overhead`: Outputs the overhaed powerletrics has while running.
 
 ## Weights for energy footprint
 
