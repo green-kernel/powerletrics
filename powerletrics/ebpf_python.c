@@ -66,15 +66,25 @@ TRACEPOINT_PROBE(sched, sched_switch) {
     bpf_probe_read_kernel(&next_comm, sizeof(next_comm), args->next_comm);
 
     // Store the comm for the pids
-    struct pid_comm_t pid_comm = {};
-    pid_comm.pid = next_pid;
-    __builtin_memcpy(&pid_comm.comm, &next_comm, sizeof(next_comm));
-    pid_comm_map.update(&next_pid, &pid_comm);
+    struct pid_comm_t *existing_entry;
 
-    struct pid_comm_t prev_pid_comm = {};
-    prev_pid_comm.pid = prev_pid;
-    __builtin_memcpy(&prev_pid_comm.comm, &prev_comm, sizeof(prev_comm));
-    pid_comm_map.update(&prev_pid, &prev_pid_comm);
+    existing_entry = pid_comm_map.lookup(&next_pid);
+    if (!existing_entry) {
+        struct pid_comm_t pid_comm = {};
+        pid_comm.pid = next_pid;
+        __builtin_memcpy(&pid_comm.comm, &next_comm, sizeof(next_comm));
+        pid_comm_map.update(&next_pid, &pid_comm);
+    }
+
+    existing_entry = pid_comm_map.lookup(&prev_pid);
+    if (!existing_entry) {
+        struct pid_comm_t prev_pid_comm = {};
+        prev_pid_comm.pid = prev_pid;
+        __builtin_memcpy(&prev_pid_comm.comm, &prev_comm, sizeof(prev_comm));
+        pid_comm_map.update(&prev_pid, &prev_pid_comm);
+    }
+
+
 
     // We used to handle the idle time with pid 0 but having an own tracepoint was more reliable. Keeping this for referece
     if (prev_pid == 0) {
