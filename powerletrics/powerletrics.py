@@ -530,10 +530,11 @@ def get_data():
             data.disk_read_bytes = disk_reads[pid_key] if pid_key in disk_reads else 0
             data.disk_write_bytes = disk_writes[pid_key] if pid_key in disk_writes else 0
             
-            if comm := pid_comm[pid_key]:
+            comm = pid_comm.get(pid_key)
+            if comm:
                 data.comm = comm.decode('utf-8', 'replace')
             else:
-                data.comm = "<unknown>"
+                data.comm = '<unknown>'
 
             if args.overhead and data.pid in thread_pid_list:
                 # We can add the time that ebpf takes to the powerletrics process. 
@@ -668,7 +669,7 @@ class LittleServer(http.server.SimpleHTTPRequestHandler):
         self.send_header("Expires", "0")
         super().end_headers()
 
-def poulate_all_native_thread_ids():
+def populate_all_native_thread_ids():
     global thread_pid_list
     for thread in threading.enumerate():
         try:
@@ -704,4 +705,10 @@ if __name__ == '__main__':
         server_thread.start()
         threads.append(server_thread)
 
-    poulate_all_native_thread_ids()
+    populate_all_native_thread_ids()
+
+    try:
+        for t in threads:
+            t.join()
+    except KeyboardInterrupt:
+        pass
