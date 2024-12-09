@@ -28,6 +28,8 @@ you can also start a little server with
 powerletrics -s
 ```
 
+If this list is scary long you might want to try the `--short` parameter which removes everything with an energy footprint of smaller than `0.01`.
+
 ### CPU Energy
 
 There is also the option to get the CPU energy from RAPL. You can activate this with ``--rapl``.
@@ -62,6 +64,7 @@ If you want to use this feature you will need to install `gcc` on your machine a
 - `--show-process-io`: Displays per-process I/O statistics, such as disk read and write bytes.
 - `--show-process-netstats`: Displays per-process network statistics, including the number of received and transmitted network packets.
 - `--show-command-line`: Displays the full command-line arguments for each process.
+- `--short`: There are a lot of processes that don't really incur a lot of impact (energy footprint is 0.0). So we can remove them so that the list does't get too long.
 - `--format`: Specifies the format in which the output will be displayed: **Default**: `text`
     - **Choices**:
         - `text`: Human-readable text format.

@@ -69,6 +69,7 @@ parser.add_argument('-A', '--show-all', action='store_true',
 parser.add_argument('--show-process-io', action='store_true', help='Show per-process io information')
 parser.add_argument('--show-process-netstats', action='store_true', help='Show per-process network information')
 parser.add_argument('--show-command-line', action='store_true', help='Shows the full command line arguments')
+parser.add_argument('--short', action='store_true', help='Removes all processes that have an energy footprint of 0 from the output.')
 parser.add_argument('--format', type=str, choices=['text', 'plist'], default='text', help='Display data in specified format [default: text]')
 parser.add_argument('--proc-memory', action='store_true', help='Disables eBPF memory sampling')
 parser.add_argument('-f', '--flush', action='store_true', help='Flushes after print')
@@ -329,14 +330,18 @@ def print_text(args, data_list, current_time, elapsed_time_ms, rapl_energy_sums)
         headers.extend(['Disk Read Bytes', 'Disk Write Bytes'])
     if args.show_process_netstats or args.show_all:
         headers.extend(['Net RX Packets', 'Net TX Packets'])
-    if args.show_command_line or args.show_all:
-        headers.append('Command Line')
     if args.thread or args.show_all:
         headers.append("Is Thread")
+    if args.show_command_line or args.show_all:
+        headers.append('Command Line')
 
     # Initialize the list of rows
     rows = []
     for data in data_list:
+
+        if args.short and data.energy_footprint() < 0.01:
+            continue
+
         row = [data.pid, data.comm, f"{data.energy_footprint():.2f}", f"{data.cpu_utilization():.2f}", data.cpu_time_ns, data.cpu_wakeups]
         if data.is_kernel_thread:
             row.append('-')
@@ -346,10 +351,10 @@ def print_text(args, data_list, current_time, elapsed_time_ms, rapl_energy_sums)
             row.extend([data.disk_read_bytes, data.disk_write_bytes])
         if args.show_process_netstats or args.show_all:
             row.extend([data.net_rx_packets, data.net_tx_packets])
-        if args.show_command_line or args.show_all:
-            row.append(data.cmdline)
         if args.thread or args.show_all:
             row.append(data.is_thread)
+        if args.show_command_line or args.show_all:
+            row.append(data.cmdline)
 
         rows.append(row)
 
@@ -392,12 +397,16 @@ def print_xml(args, data_list, current_time, elapsed_time_ms, rapl_energy_sums):
     plist_data = []
 
     for data in data_list:
+
+        if args.short and data.energy_footprint() < 0.01:
+            continue
+
         data_dict = {
             'PID': data.pid,
             'Name': data.comm,
             'Current Time': current_time,
             'Elapsed Time': elapsed_time_ms,
-            'Energy footprint': data.energy_footprint(),
+            'Energy Footprint': data.energy_footprint(),
             'CPU Utilization (%)': data.cpu_utilization(),
             'CPU Time (ns)': data.cpu_time_ns,
             'CPU Wakeups': data.cpu_wakeups,
@@ -415,6 +424,9 @@ def print_xml(args, data_list, current_time, elapsed_time_ms, rapl_energy_sums):
         if args.show_process_netstats or args.show_all:
             data_dict['Net RX Packets'] = data.net_rx_packets
             data_dict['Net TX Packets'] = data.net_tx_packets
+
+        if args.thread or args.show_all:
+            data_dict['Thread'] = data.is_thread
 
         if args.show_command_line or args.show_all:
             data_dict['Command Line'] = data.cmdline
@@ -707,7 +719,7 @@ def populate_all_native_thread_ids():
         except AttributeError:
             pass
 
-if __name__ == '__main__':
+def main():
     threads = []
 
     ebpf_thread = threading.Thread(target=get_data)
@@ -742,3 +754,7 @@ if __name__ == '__main__':
             t.join()
     except KeyboardInterrupt:
         pass
+
+
+if __name__ == '__main__':
+    main()
