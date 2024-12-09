@@ -82,6 +82,7 @@ parser.add_argument('--rapl', action='store_true', help='Gets the CPU energy wit
 parser.add_argument('--psys', action='store_true', help='Gets the machine energy with RAPL. You will need to run make to use this feature')
 parser.add_argument('--rapl-sample-rate', type=int, default=500, help='Sample every N ms [default: 500ms]')
 parser.add_argument('--overhead', action='store_true', help='Outputs the overhead powerletrics has on the system')
+parser.add_argument('--thread', action='store_true', help='Shows if the process is a thread')
 
 
 args = parser.parse_args()
@@ -309,6 +310,8 @@ def print_text(args, data_list, current_time, elapsed_time_ms, rapl_energy_sums)
         headers.extend(['Net RX Packets', 'Net TX Packets'])
     if args.show_command_line or args.show_all:
         headers.append('Command Line')
+    if args.thread or args.show_all:
+        headers.append("Is Thread")
 
     # Initialize the list of rows
     rows = []
@@ -324,6 +327,8 @@ def print_text(args, data_list, current_time, elapsed_time_ms, rapl_energy_sums)
             row.extend([data.net_rx_packets, data.net_tx_packets])
         if args.show_command_line or args.show_all:
             row.append(data.cmdline)
+        if args.thread or args.show_all:
+            row.append(data.is_thread)
 
         rows.append(row)
 
@@ -424,6 +429,7 @@ class BPFData:
         self.disk_read_bytes = 0
         self.disk_write_bytes = 0
         self.is_kernel_thread = False
+        self.is_thread = True
 
     def memory_usage_mb(self):
         return self.memory_usage / (1024 * 1024)
@@ -502,6 +508,7 @@ def get_data():
         disk_reads = {key.value: value.value for key, value in disk_reads_map.items()}
         disk_writes = {key.value: value.value for key, value in disk_writes_map.items()}
         pid_comm = {key.value: value.comm for key, value in pid_comm_map.items()}
+        pid_thread = {key.value: value.is_thread for key, value in pid_comm_map.items()}
         idle_times = {key.value: value.value for key, value in idle_times_map.items()}
         ebpf_mem_usages = {key.value: value.value for key, value in ebpf_mem_usages_map.items()}
         ebpf_time_ns = {key.value: value.value for key, value in ebpf_time_ns_map.items()}
@@ -529,6 +536,7 @@ def get_data():
             data.net_tx_packets = tx_packets[pid_key] if pid_key in tx_packets else 0
             data.disk_read_bytes = disk_reads[pid_key] if pid_key in disk_reads else 0
             data.disk_write_bytes = disk_writes[pid_key] if pid_key in disk_writes else 0
+            data.is_thread = pid_thread[pid_key] if pid_key in pid_thread else False
             
             comm = pid_comm.get(pid_key)
             if comm:
@@ -579,6 +587,7 @@ def get_data():
         idle_data.comm = "Kernel Idle"
         idle_data.memory_usage = 0
         idle_data.is_kernel_thread = True
+        idle_data.is_thread = False
         idle_data.cpu_time_ns = sum([idle_times[cpu_id] for cpu_id in idle_times.keys()])
         data_list.append(idle_data)
 

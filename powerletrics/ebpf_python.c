@@ -23,10 +23,10 @@ BPF_HASH(idle_time_ns, u32, u64);
 struct pid_comm_t {
     u32 pid;
     char comm[TASK_COMM_LEN];
+    bool is_thread;
 };
 
-BPF_HASH(pid_comm_map, u32, struct pid_comm_t);
-
+BPF_TABLE("lru_hash", u32, struct pid_comm_t, pid_comm_map, 1024);
 
 TRACEPOINT_PROBE(power, cpu_idle) {
     u32 cpu = args->cpu_id;
@@ -66,24 +66,40 @@ TRACEPOINT_PROBE(sched, sched_switch) {
     bpf_probe_read_kernel(&next_comm, sizeof(next_comm), args->next_comm);
 
     // Store the comm for the pids
-    struct pid_comm_t *existing_entry;
+    //struct pid_comm_t *existing_entry;
 
-    existing_entry = pid_comm_map.lookup(&next_pid);
-    if (!existing_entry) {
+
+    // Get the task_struct of the currently executing task (which is now next_pid)
+    struct task_struct *task = (struct task_struct *)bpf_get_current_task();
+    u32 tgid = 0;
+    u32 pid = 0;
+    bpf_probe_read_kernel(&tgid, sizeof(tgid), &task->tgid);
+    bpf_probe_read_kernel(&pid, sizeof(pid), &task->pid);
+
+    bool is_thread_next = (pid != tgid);
+
+    // existing_entry = pid_comm_map.lookup(&next_pid);
+    // if (!existing_entry) {
         struct pid_comm_t pid_comm = {};
         pid_comm.pid = next_pid;
         __builtin_memcpy(&pid_comm.comm, &next_comm, sizeof(next_comm));
+        pid_comm.is_thread = is_thread_next;
         pid_comm_map.update(&next_pid, &pid_comm);
-    }
+    // }
 
-    existing_entry = pid_comm_map.lookup(&prev_pid);
-    if (!existing_entry) {
+    // existing_entry = pid_comm_map.lookup(&prev_pid);
+    // if (!existing_entry) {
         struct pid_comm_t prev_pid_comm = {};
         prev_pid_comm.pid = prev_pid;
         __builtin_memcpy(&prev_pid_comm.comm, &prev_comm, sizeof(prev_comm));
+        struct pid_comm_t *prev_entry = pid_comm_map.lookup(&prev_pid);
+        if (prev_entry) {
+            prev_pid_comm.is_thread = prev_entry->is_thread;
+        } else {
+            prev_pid_comm.is_thread = false;  
+        }
         pid_comm_map.update(&prev_pid, &prev_pid_comm);
-    }
-
+    // }
 
 
     // We used to handle the idle time with pid 0 but having an own tracepoint was more reliable. Keeping this for referece
@@ -129,7 +145,6 @@ TRACEPOINT_PROBE(sched, sched_switch) {
         }
     }
 
-    struct task_struct *task = (struct task_struct *)bpf_get_current_task();
      if ((task->flags & PF_KTHREAD) == 0) {
         u32 pid = task->pid;
         u64 *mem_usage = mem_usage_bytes.lookup_or_try_init(&pid, &zero);

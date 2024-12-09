@@ -76,6 +76,7 @@ If you want to use this feature you will need to install `gcc` on your machine a
 - `--psys`: If you want to get the energy data for your machine
 - `--rapl-sample-rate`: How often you want rapl and psys to get the data. Defaults to 500ms
 - `--overhead`: Outputs the overhaed powerletrics has while running.
+- `--thread`: Shows if the process is a thread (pid != tid)
 
 ## Weights for energy footprint
 
