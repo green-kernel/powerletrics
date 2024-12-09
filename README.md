@@ -20,7 +20,7 @@ PowerLetrics will try and build everything on the first run for you.
 
 4. You can then run the program from the shell:
 ```bash
-powerletrics -i 1000 --show-all
+powerletrics -i 1000 --short
 ```
 
 you can also start a little server with
