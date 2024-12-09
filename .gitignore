@@ -3,3 +3,5 @@ perf_junk
 dist
 powerletrics.egg-info
 venv
+*.o
+metric-provider-binary

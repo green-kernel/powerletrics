@@ -85,7 +85,7 @@ can modify them in the `config.conf` or `/etc/powerletrics` file.
 
 ## Funding
 
-This work has been funded by the (Green Screen Catalyst Fund)[https://greenscreen.network/en/blog/announcing-the-new-catalyst-fund-awardees/].
+This work has been funded by the [Green Screen Catalyst Fund](https://greenscreen.network/en/blog/announcing-the-new-catalyst-fund-awardees/).
 
 If you like this work and want to fund this please feel free to reach out.
 
@@ -110,3 +110,6 @@ Only programs that have run are listed as they are the only ones that have actua
 
 ### Why don't you use psutil
 Because it does the same things (yes we check) and is slower as it adds more overhead. We still 😍 psutil though.
+
+### Why are so many process names `<unknown>`?
+If you have a large sample period and a lot is happening on your system the data structure we use to save the names of the processes might overflow and start overwriting itself. If this happens please set `COMM_LENGTH` to something larger in the `config.conf`.

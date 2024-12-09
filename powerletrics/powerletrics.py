@@ -130,6 +130,8 @@ NETWORK_WRITE_WEIGHT = float(config['Weights'].get('NETWORK_WRITE_WEIGHT', 0))
 NETWORK_READ_WEIGHT = float(config['Weights'].get('NETWORK_READ_WEIGHT', 0))
 MEMORY_WEIGHT = float(config['Weights'].get('MEMORY_WEIGHT', 0))
 
+bpf_program = bpf_program.replace('__COMM_LENGTH__', config['eBPF'].get('COMM_LENGTH', 4096))
+
 num_cpus = len(os.sched_getaffinity(0))
 
 b = BPF(text=bpf_program)
@@ -245,10 +247,29 @@ db = DB()
 
 rapl_reading = {}
 
+def ensure_metrics_provider_built(binary_path):
+    global stop_event
+
+    if not os.path.isfile(binary_path):
+        print(f"Metrics provider binary not found at {binary_path}. Attempting to build it with make...")
+        try:
+            subprocess.run(['make'], cwd=current_dir, check=True)
+            if not os.path.isfile(binary_path):
+                print(f"Failed to build the metrics provider binary at {binary_path}.")
+                stop_event.set()
+                sys.exit(1)
+            else:
+                print("Successfully built the metrics provider binary.")
+        except subprocess.CalledProcessError as e:
+            print(f"Make failed with error: {e}")
+            stop_event.set()
+            sys.exit(1)
 
 def rapl_metrics_provider_thread(interval, params):
     binary_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), './providers/rapl/metric-provider-binary')
-    
+
+    ensure_metrics_provider_built(binary_path)
+
     if not os.path.isfile(binary_path):
         print('Could not find metric provider bin. Did you run $ make?')
         stop_event.set()
@@ -512,7 +533,7 @@ def get_data():
         idle_times = {key.value: value.value for key, value in idle_times_map.items()}
         ebpf_mem_usages = {key.value: value.value for key, value in ebpf_mem_usages_map.items()}
         ebpf_time_ns = {key.value: value.value for key, value in ebpf_time_ns_map.items()}
-        
+
         cpu_times_map.clear()
         wakeups_map.clear()
         rx_packets_map.clear()
@@ -537,7 +558,7 @@ def get_data():
             data.disk_read_bytes = disk_reads[pid_key] if pid_key in disk_reads else 0
             data.disk_write_bytes = disk_writes[pid_key] if pid_key in disk_writes else 0
             data.is_thread = pid_thread[pid_key] if pid_key in pid_thread else False
-            
+
             comm = pid_comm.get(pid_key)
             if comm:
                 data.comm = comm.decode('utf-8', 'replace')
@@ -545,8 +566,8 @@ def get_data():
                 data.comm = '<unknown>'
 
             if args.overhead and data.pid in thread_pid_list:
-                # We can add the time that ebpf takes to the powerletrics process. 
-                # This is mathematically not 100% correct as we would need to substract this from all other processes. But this would create even more overhead and the added time is minimum. 
+                # We can add the time that ebpf takes to the powerletrics process.
+                # This is mathematically not 100% correct as we would need to substract this from all other processes. But this would create even more overhead and the added time is minimum.
                 # This is more a gimmic to be honest
                 data.cpu_time_ns = data.cpu_time_ns + sum([ebpf_time_ns[cpu_id] for cpu_id in ebpf_time_ns.keys()])
 
@@ -580,7 +601,7 @@ def get_data():
 
             data_list.append(data)
 
-        # We need to create the idle task 
+        # We need to create the idle task
         idle_data = BPFData(elapsed_time_ns)
         idle_data.pid = 0
         idle_data.cmdline = "<idle>"
@@ -611,7 +632,7 @@ def get_data():
                 for time, data in rapl_reading.items()
                 if last_time <= time <= datetime.datetime.now()
             ]
-            
+
             last_time = datetime.datetime.now()
 
             for data in readings_in_range:

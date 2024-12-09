@@ -26,7 +26,7 @@ struct pid_comm_t {
     bool is_thread;
 };
 
-BPF_TABLE("lru_hash", u32, struct pid_comm_t, pid_comm_map, 1024);
+BPF_TABLE("lru_hash", u32, struct pid_comm_t, pid_comm_map, __COMM_LENGTH__);
 
 TRACEPOINT_PROBE(power, cpu_idle) {
     u32 cpu = args->cpu_id;
@@ -62,9 +62,8 @@ TRACEPOINT_PROBE(sched, sched_switch) {
 
     char prev_comm[TASK_COMM_LEN];
     char next_comm[TASK_COMM_LEN];
-    bpf_probe_read_kernel(&prev_comm, sizeof(prev_comm), args->prev_comm);
-    bpf_probe_read_kernel(&next_comm, sizeof(next_comm), args->next_comm);
-
+    bpf_probe_read_kernel_str(prev_comm, sizeof(prev_comm), args->prev_comm);
+    bpf_probe_read_kernel_str(next_comm, sizeof(next_comm), args->next_comm);
     // Store the comm for the pids
     //struct pid_comm_t *existing_entry;
 
@@ -96,7 +95,7 @@ TRACEPOINT_PROBE(sched, sched_switch) {
         if (prev_entry) {
             prev_pid_comm.is_thread = prev_entry->is_thread;
         } else {
-            prev_pid_comm.is_thread = false;  
+            prev_pid_comm.is_thread = false;
         }
         pid_comm_map.update(&prev_pid, &prev_pid_comm);
     // }
