@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "powerletrics"
-version = "0.0.5"
+version = "0.0.6"
 authors = [
   { name="Didi Hoffmann", email="powerletrics@ribalba.de" },
 ]
@@ -14,7 +14,7 @@ license = { file = "LICENSE" }
 requires-python = ">=3.11"
 classifiers = [
     "Programming Language :: Python :: 3",
-    "Development Status :: 2 - Pre-Alpha",
+    "Development Status :: 3 - Alpha",
     "Environment :: Console",
     "License :: OSI Approved :: GNU Affero General Public License v3 or later (AGPLv3+)",
 ]
